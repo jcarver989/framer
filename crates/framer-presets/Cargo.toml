@@ -4,6 +4,7 @@ version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
 description = "Ready-made framer presets for setting up Rust repositories"
 readme = "README.md"
 keywords = ["scaffolding", "projen", "preset", "github-actions", "monorepo"]
