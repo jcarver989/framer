@@ -44,6 +44,7 @@ mod files;
 mod format;
 mod fs;
 pub mod github;
+pub mod just;
 mod manifest;
 mod output;
 mod project;
