@@ -1,7 +1,11 @@
-use framer::github::Step;
+use framer::github::{Job, Step};
+use framer::just::Justfile;
+use framer::rust::{Level, Lints, Profile};
 use framer::testing::{render, render_into, render_preset};
 use framer::{MemoryFs, Mode, Project, Result};
-use framer_presets::{Dist, ReleasePlz, RustMonorepo};
+use framer_presets::{
+    Ci, CompilingJob, Dist, Release, ReleasePlz, Rust, RustMonorepo, Rustfmt, Tools, Workspace,
+};
 use indoc::indoc;
 
 #[test]
@@ -122,9 +126,7 @@ fn ci_runs_the_same_recipes_as_local_development() -> Result<()> {
 
 #[test]
 fn setup_steps_run_before_every_job_that_compiles() -> Result<()> {
-    let preset = RustMonorepo::new().ci_setup(
-        Step::run("sudo apt-get install --yes libfontconfig1-dev").name("Install system libraries"),
-    );
+    let preset = RustMonorepo::new().ci(Ci::new().setup(system_libraries()));
 
     let fs = render_preset(preset)?;
 
@@ -139,7 +141,8 @@ fn setup_steps_run_before_every_job_that_compiles() -> Result<()> {
 
 #[test]
 fn tests_run_on_every_ci_runner() -> Result<()> {
-    let fs = render_preset(RustMonorepo::new().ci_runners(["ubuntu-latest", "macos-latest"]))?;
+    let fs =
+        render_preset(RustMonorepo::new().ci(Ci::new().matrix(["ubuntu-latest", "macos-latest"])))?;
 
     let ci = file(&fs, ".github/workflows/ci.yml");
     assert!(
@@ -151,11 +154,12 @@ fn tests_run_on_every_ci_runner() -> Result<()> {
 #[test]
 fn msrv_toolchain_and_tools_are_configurable() -> Result<()> {
     let preset = RustMonorepo::new()
-        .msrv("1.97")
-        .toolchain("1.99.1")
-        .targets(["wasm32-unknown-unknown"])
-        .tool("just", "1.60.0")
-        .tool("actionlint", "1.7.12");
+        .rust(
+            Rust::new("1.97")
+                .toolchain("1.99.1")
+                .targets(["wasm32-unknown-unknown"]),
+        )
+        .tools(Tools::new().just("1.60.0").tool("actionlint", "1.7.12"));
 
     let fs = render_preset(preset)?;
 
@@ -172,7 +176,8 @@ fn msrv_toolchain_and_tools_are_configurable() -> Result<()> {
 #[test]
 fn release_plz_owns_only_its_workspace_settings() -> Result<()> {
     let fs = render_preset(
-        RustMonorepo::new().release_plz(ReleasePlz::new().set("semver_check", false)),
+        RustMonorepo::new()
+            .release(Release::new().release_plz(ReleasePlz::new().set("semver_check", false))),
     )?;
 
     assert_eq!(
@@ -199,7 +204,7 @@ fn release_plz_owns_only_its_workspace_settings() -> Result<()> {
 fn release_plz_can_publish_with_the_default_token() -> Result<()> {
     let release_plz = ReleasePlz::new().publish_to_crates_io().github_token();
 
-    let fs = render_preset(RustMonorepo::new().release_plz(release_plz))?;
+    let fs = render_preset(RustMonorepo::new().release(Release::new().release_plz(release_plz)))?;
 
     let workflow = file(&fs, ".github/workflows/release-plz.yml");
     assert!(!workflow.contains("app-token"));
@@ -214,7 +219,10 @@ fn release_plz_can_publish_with_the_default_token() -> Result<()> {
 
 #[test]
 fn dist_adds_config_profile_tool_recipes_and_a_ci_check() -> Result<()> {
-    let fs = render_preset(RustMonorepo::new().dist(Dist::new().homebrew_tap("me/homebrew-tap")))?;
+    let fs = render_preset(
+        RustMonorepo::new()
+            .release(Release::new().dist(Dist::new().homebrew_tap("me/homebrew-tap"))),
+    )?;
 
     assert!(file(&fs, "dist-workspace.toml").contains(indoc! {r#"
         installers = ["shell", "homebrew"]
@@ -233,7 +241,9 @@ fn dist_adds_config_profile_tool_recipes_and_a_ci_check() -> Result<()> {
 
 #[test]
 fn a_customized_release_workflow_skips_the_dist_check() -> Result<()> {
-    let fs = render_preset(RustMonorepo::new().dist(Dist::new().allow_dirty_ci()))?;
+    let fs = render_preset(
+        RustMonorepo::new().release(Release::new().dist(Dist::new().allow_dirty_ci())),
+    )?;
 
     assert!(file(&fs, "dist-workspace.toml").contains("allow-dirty = [\"ci\"]"));
     assert!(!file(&fs, ".github/workflows/ci.yml").contains("dist-check"));
@@ -254,11 +264,170 @@ fn turning_off_release_automation_cleans_it_up() -> Result<()> {
     Ok(())
 }
 
+#[test]
+fn workspace_members_lints_and_profiles_are_configurable() -> Result<()> {
+    let preset = RustMonorepo::new()
+        .workspace(
+            Workspace::new()
+                .members(["crates/ui/*", "crates/app/*"])
+                .exclude(["vendor/gpui"])
+                .profile(Profile::new("dev").set("debug", 1)),
+        )
+        .lints(Lints::clippy_pedantic().rust("unsafe_code", Level::Forbid));
+
+    let fs = render_preset(preset)?;
+
+    let cargo = file(&fs, "Cargo.toml");
+    assert!(
+        cargo.contains(
+            "members = [\"crates/ui/*\", \"crates/app/*\"]\nexclude = [\"vendor/gpui\"]\n"
+        )
+    );
+    assert!(cargo.contains("[workspace.lints.rust]\nunsafe_code = \"forbid\"\n\n"));
+    assert!(!cargo.contains("unreachable_pub"));
+    assert!(cargo.ends_with("[profile.dev]\ndebug = 1\n"));
+    Ok(())
+}
+
+#[test]
+fn rustfmt_options_extend_and_override_the_preset() -> Result<()> {
+    let preset = RustMonorepo::new().rustfmt(
+        Rustfmt::new()
+            .set("max_width", 120)
+            .set("use_try_shorthand", false),
+    );
+
+    let fs = render_preset(preset)?;
+
+    assert!(file(&fs, "rustfmt.toml").ends_with(indoc! {r#"
+        edition = "2024"
+        use_field_init_shorthand = true
+        use_try_shorthand = false
+        max_width = 120
+    "#}));
+    Ok(())
+}
+
+#[test]
+fn nextest_requires_the_version_mise_installs() -> Result<()> {
+    let fs = render_preset(RustMonorepo::new().tools(Tools::new().nextest("0.9.150")))?;
+
+    assert!(
+        file(&fs, ".config/nextest.toml")
+            .contains("nextest-version = { required = \"0.9.150\" }\n")
+    );
+    Ok(())
+}
+
+#[test]
+fn extra_manifests_are_linted_and_formatted() -> Result<()> {
+    let fs = render_preset(
+        RustMonorepo::new()
+            .workspace(Workspace::new().extra_manifests(["tests/fixture/Cargo.toml"])),
+    )?;
+
+    let justfile = file(&fs, "justfile");
+    assert!(justfile.contains(
+        "    cargo clippy --manifest-path tests/fixture/Cargo.toml --target-dir target --all-targets --all-features -- -D warnings\n"
+    ));
+    assert!(justfile.contains("    cargo fmt --manifest-path tests/fixture/Cargo.toml\n"));
+    assert!(
+        justfile.contains("    cargo fmt --manifest-path tests/fixture/Cargo.toml -- --check\n")
+    );
+    Ok(())
+}
+
+#[test]
+fn recipes_can_be_changed_after_the_preset_is_applied() -> Result<()> {
+    let mut project = project(RustMonorepo::new());
+    let justfile = project
+        .get_mut::<Justfile>()
+        .expect("the preset adds a justfile");
+    justfile.remove_recipe("test");
+    justfile
+        .recipe_mut("check")
+        .expect("the preset has a check recipe")
+        .lines_mut()
+        .push("cargo check --target wasm32-unknown-unknown".into());
+
+    let fs = render(&project)?;
+
+    let justfile = file(&fs, "justfile");
+    assert!(!justfile.contains("\ntest profile"));
+    assert!(justfile.contains(
+        "check:\n    cargo check --workspace --all-targets --all-features\n    cargo check --target wasm32-unknown-unknown\n"
+    ));
+    Ok(())
+}
+
+#[test]
+fn compiling_jobs_set_up_like_the_preset_jobs() -> Result<()> {
+    let preset = RustMonorepo::new().ci(Ci::new().setup(system_libraries()).compiling_job(
+        CompilingJob::new("wasm", "WASM", "wasm-check")
+            .timeout_minutes(25)
+            .before(Step::run("cargo install trunk").name("Install trunk"))
+            .step(Step::run("npm test").name("Run browser tests")),
+    ));
+
+    let fs = render_preset(preset)?;
+
+    let ci = file(&fs, ".github/workflows/ci.yml");
+    assert_eq!(ci.matches("Install system libraries").count(), 4);
+    let wasm = job_section(ci, "wasm");
+    assert!(wasm.starts_with("  wasm:\n    name: WASM\n"));
+    assert!(wasm.contains("timeout-minutes: 25\n"));
+    let order = [
+        "Cache Rust builds",
+        "Install system libraries",
+        "Install trunk",
+        "run: just wasm-check",
+        "Run browser tests",
+    ]
+    .map(|step| {
+        wasm.find(step)
+            .unwrap_or_else(|| panic!("{step} is missing"))
+    });
+    assert!(order.is_sorted(), "{wasm}");
+    Ok(())
+}
+
+#[test]
+fn plain_jobs_skip_the_setup_steps() -> Result<()> {
+    let preset = RustMonorepo::new().ci(Ci::new().setup(system_libraries()).job(
+        Job::new("audit")
+            .name("Audit")
+            .step(Step::run("cargo audit")),
+    ));
+
+    let fs = render_preset(preset)?;
+
+    let ci = file(&fs, ".github/workflows/ci.yml");
+    let audit = job_section(ci, "audit");
+    assert!(audit.contains("run: cargo audit\n"));
+    assert!(!audit.contains("Install system libraries"));
+    Ok(())
+}
+
+#[test]
+fn ci_framer_check_and_conventions_are_optional() -> Result<()> {
+    let without_check = render_preset(RustMonorepo::new().ci(Ci::new().without_framer_check()))?;
+    let without_ci = render_preset(RustMonorepo::new().without_ci().without_conventions())?;
+
+    assert!(!file(&without_check, ".github/workflows/ci.yml").contains("framer-check"));
+    assert!(file(&without_check, "justfile").contains("\nframer-check:"));
+    assert_eq!(without_ci.get(".github/workflows/ci.yml"), None);
+    assert_eq!(without_ci.get("AGENTS.md"), None);
+    Ok(())
+}
+
 fn full_preset() -> RustMonorepo {
     RustMonorepo::new()
-        .repository("https://github.com/me/app")
-        .release_plz(ReleasePlz::new())
-        .dist(Dist::new())
+        .workspace(Workspace::new().repository("https://github.com/me/app"))
+        .release(
+            Release::new()
+                .release_plz(ReleasePlz::new())
+                .dist(Dist::new()),
+        )
 }
 
 fn project(preset: RustMonorepo) -> Project {
@@ -270,4 +439,15 @@ fn project(preset: RustMonorepo) -> Project {
 fn file<'a>(fs: &'a MemoryFs, path: &str) -> &'a str {
     fs.get(path)
         .unwrap_or_else(|| panic!("{path} was not generated"))
+}
+
+fn system_libraries() -> Step {
+    Step::run("sudo apt-get install --yes libfontconfig1-dev").name("Install system libraries")
+}
+
+fn job_section<'a>(workflow: &'a str, id: &str) -> &'a str {
+    let start = workflow
+        .find(&format!("  {id}:\n"))
+        .unwrap_or_else(|| panic!("the {id} job was not generated"));
+    &workflow[start..]
 }

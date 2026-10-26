@@ -28,8 +28,8 @@
         "workspace.resolver",
         "workspace.members",
         "workspace.package.edition",
-        "workspace.package.rust-version",
         "workspace.package.license",
+        "workspace.package.rust-version",
         "workspace.lints",
         "profile.dev"
       ]
