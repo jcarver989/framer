@@ -113,11 +113,34 @@ project.synth()
 
 For a ready-made one, see [`framer-presets`](crates/framer-presets): `project.apply(framer_presets::RustMonorepo::new())`.
 
+`RustMonorepo` covers the common variations without escape hatches:
+
+```rust
+project.apply(
+    RustMonorepo::new()
+        .workspace(
+            Workspace::new()
+                .members(["crates/ui/*", "crates/app/*"])
+                .exclude(["vendor/gpui"])
+                .extra_manifests(["tests/fixture/Cargo.toml"]),
+        )
+        .rustfmt(Rustfmt::new().set("max_width", 120))
+        .ci(
+            Ci::new()
+                .compiling_job(CompilingJob::new("wasm", "WASM", "wasm-check"))
+                .without_framer_check(),
+        ),
+);
+```
+
+Each theme takes one config struct whose `new()` holds the preset's defaults (`Rust::new` takes just the MSRV): `.rust(Rust)`, `.workspace(Workspace)`, `.lints(Lints)`, `.rustfmt(Rustfmt)`, `.tools(Tools)`, `.ci(Ci)` and `.release(Release)`. It also takes `.without_ci()` and `.without_conventions()`. A repository can also publish its own preset from its `.framer/` crate, as a library next to the binary, for sibling repositories to depend on by path.
+
 Bumping the preset's version in a repository and running `cargo framer` rolls out the change. Test presets without touching the disk using `framer::testing::render_preset`, which generates into an in-memory `MemoryFs`.
 
 ## Escape hatches
 
 - **Change a component a preset added:** `project.get_mut::<T>()`.
+- **Change a recipe a preset added:** `project.get_mut::<framer::just::Justfile>()`, then `recipe_mut("lint")` or `remove_recipe("test")`. Recipes outside the block stay yours.
 - **Set any TOML key**, in a generated or partly generated file: `project.toml("Cargo.toml").set("profile.dist.codegen-units", 1_i64)`.
 - **Stop generating one file** but keep it as yours: `project.unmanage(".github/workflows/ci.yml")`.
 - **Write your own component:** implement `Component` and write to the `Output`.

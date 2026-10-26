@@ -1,6 +1,7 @@
 use crate::ci::just_job;
 use framer::TomlFile;
 use framer::github::Job;
+use framer::just::Recipe;
 use framer::rust::Profile;
 use framer::toml_edit::{Array, Value};
 
@@ -128,20 +129,18 @@ impl Dist {
         })
     }
 
-    pub(crate) fn recipes() -> &'static str {
-        "
-# Preview what dist will build for the next release
-dist-plan:
-    dist plan
-
-# Regenerate the release workflow from dist-workspace.toml
-dist-generate:
-    dist generate
-
-# Check the release workflow matches dist-workspace.toml
-dist-check:
-    dist generate --check
-"
+    pub(crate) fn recipes() -> [Recipe; 3] {
+        [
+            Recipe::new("dist-plan")
+                .doc("Preview what dist will build for the next release")
+                .line("dist plan"),
+            Recipe::new("dist-generate")
+                .doc("Regenerate the release workflow from dist-workspace.toml")
+                .line("dist generate"),
+            Recipe::new("dist-check")
+                .doc("Check the release workflow matches dist-workspace.toml")
+                .line("dist generate --check"),
+        ]
     }
 
     pub(crate) fn ci_job(&self) -> Option<Job> {

@@ -5,6 +5,7 @@ use framer::{Project, TomlKeys};
 
 const ACTION: &str = "release-plz/action@v0.5.142";
 const APP_TOKEN_ACTION: &str = "actions/create-github-app-token@v3";
+const CRATES_IO_AUTH_ACTION: &str = "rust-lang/crates-io-auth-action@v1";
 const CONFIG: &str = "release-plz.toml";
 
 /// Release PRs and tags with [release-plz](https://release-plz.dev).
@@ -63,8 +64,11 @@ impl ReleasePlz {
         self
     }
 
-    /// Lets the workflow publish crates, with the `CARGO_REGISTRY_TOKEN` secret.
-    /// Choose which crates publish with `publish = true` in their `[[package]]` entries.
+    /// Lets the workflow publish crates through crates.io trusted publishing,
+    /// so no registry token is stored. Each crate needs a trusted publisher
+    /// for `release-plz.yml` on crates.io, which only exists after its first
+    /// publish, so publish new crates once by hand. Choose which crates
+    /// publish with `publish = true` in their `[[package]]` entries.
     pub fn publish_to_crates_io(mut self) -> Self {
         self.crates_io = true;
         self
@@ -95,10 +99,13 @@ impl ReleasePlz {
     }
 
     fn workflow(&self) -> Workflow {
-        let release = self
+        let mut release = self
             .job("release-plz-release", "Release-plz release", "release")
             .permission("contents", "write")
             .permission("pull-requests", "read");
+        if self.crates_io {
+            release = release.permission("id-token", "write");
+        }
         let pr = self
             .job("release-plz-pr", "Release-plz PR", "release-pr")
             .needs("release-plz-release")
@@ -132,19 +139,25 @@ impl ReleasePlz {
             .name(format!("Run release-plz {command}"))
             .with("command", command)
             .env("GITHUB_TOKEN", token);
+        job = job
+            .step(
+                checkout()
+                    .with("fetch-depth", "0")
+                    .with("persist-credentials", "false")
+                    .with("token", token),
+            )
+            .step(rust_cache());
         if self.crates_io && command == "release" {
+            job = job.step(
+                Step::uses(CRATES_IO_AUTH_ACTION)
+                    .name("Authenticate with crates.io")
+                    .id("crates-io-auth"),
+            );
             release = release.env(
                 "CARGO_REGISTRY_TOKEN",
-                "${{ secrets.CARGO_REGISTRY_TOKEN }}",
+                "${{ steps.crates-io-auth.outputs.token }}",
             );
         }
-        job.step(
-            checkout()
-                .with("fetch-depth", "0")
-                .with("persist-credentials", "false")
-                .with("token", token),
-        )
-        .step(rust_cache())
-        .step(release)
+        job.step(release)
     }
 }

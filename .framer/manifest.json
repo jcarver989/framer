@@ -6,6 +6,9 @@
     ".github/workflows/ci.yml": {
       "kind": "managed"
     },
+    ".github/workflows/release-plz.yml": {
+      "kind": "managed"
+    },
     ".gitignore": {
       "kind": "blocks",
       "ids": [
@@ -28,8 +31,9 @@
         "workspace.resolver",
         "workspace.members",
         "workspace.package.edition",
-        "workspace.package.rust-version",
         "workspace.package.license",
+        "workspace.package.repository",
+        "workspace.package.rust-version",
         "workspace.lints",
         "profile.dev"
       ]
@@ -41,6 +45,17 @@
       "kind": "blocks",
       "ids": [
         "rust-monorepo"
+      ]
+    },
+    "release-plz.toml": {
+      "kind": "toml",
+      "keys": [
+        "workspace.release_always",
+        "workspace.git_release_enable",
+        "workspace.git_tag_name",
+        "workspace.pr_branch_prefix",
+        "workspace.pr_name",
+        "workspace.dependencies_update"
       ]
     },
     "rust-toolchain.toml": {

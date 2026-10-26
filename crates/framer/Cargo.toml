@@ -1,9 +1,10 @@
 [package]
 name = "framer"
-version = "0.1.0"
+version = "0.1.1"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
 description = "Generate and maintain a Rust repository's configuration files from typed Rust code"
 readme = "../../README.md"
 keywords = ["scaffolding", "projen", "config", "codegen", "github-actions"]

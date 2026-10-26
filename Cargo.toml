@@ -6,10 +6,11 @@ members = ["crates/*"]
 edition = "2024"
 rust-version = "1.98"
 license = "MIT"
+repository = "https://github.com/jcarver989/framer"
 
 [workspace.dependencies]
 clap = { version = "4.6", features = ["derive"] }
-framer = { path = "crates/framer", version = "0.1.0" }
+framer = { path = "crates/framer", version = "0.1.1" }
 indoc = "2.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
