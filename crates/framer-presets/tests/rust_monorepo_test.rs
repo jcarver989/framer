@@ -218,6 +218,23 @@ fn release_plz_can_publish_with_the_default_token() -> Result<()> {
 }
 
 #[test]
+fn release_plz_publishes_with_trusted_publishing() -> Result<()> {
+    let release_plz = ReleasePlz::new().publish_to_crates_io();
+
+    let fs = render_preset(RustMonorepo::new().release(Release::new().release_plz(release_plz)))?;
+
+    let workflow = file(&fs, ".github/workflows/release-plz.yml");
+    let release = job_section(workflow, "release-plz-release");
+    let release = &release[..release.find("  release-plz-pr:\n").unwrap_or(release.len())];
+    assert!(release.contains("      id-token: write\n"));
+    assert!(release.contains("uses: rust-lang/crates-io-auth-action@v1\n"));
+    assert!(release.contains("CARGO_REGISTRY_TOKEN: ${{ steps.crates-io-auth.outputs.token }}\n"));
+    assert!(!workflow.contains("secrets.CARGO_REGISTRY_TOKEN"));
+    assert!(!job_section(workflow, "release-plz-pr").contains("id-token"));
+    Ok(())
+}
+
+#[test]
 fn dist_adds_config_profile_tool_recipes_and_a_ci_check() -> Result<()> {
     let fs = render_preset(
         RustMonorepo::new()
