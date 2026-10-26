@@ -1,0 +1,24 @@
+[package]
+name = "framer"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Generate and maintain a Rust repository's configuration files from typed Rust code"
+readme = "../../README.md"
+keywords = ["scaffolding", "projen", "config", "codegen", "github-actions"]
+categories = ["development-tools"]
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+similar = { workspace = true }
+thiserror = { workspace = true }
+toml_edit = { workspace = true }
+
+[dev-dependencies]
+indoc = { workspace = true }
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

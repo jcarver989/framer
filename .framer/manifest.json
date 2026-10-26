@@ -1,0 +1,53 @@
+{
+  "files": {
+    ".config/nextest.toml": {
+      "kind": "managed"
+    },
+    ".github/workflows/ci.yml": {
+      "kind": "managed"
+    },
+    ".gitignore": {
+      "kind": "blocks",
+      "ids": [
+        "framer",
+        "rust-monorepo"
+      ]
+    },
+    ".tool-versions": {
+      "kind": "managed"
+    },
+    "AGENTS.md": {
+      "kind": "blocks",
+      "ids": [
+        "rust-monorepo/conventions"
+      ]
+    },
+    "Cargo.toml": {
+      "kind": "toml",
+      "keys": [
+        "workspace.resolver",
+        "workspace.members",
+        "workspace.package.edition",
+        "workspace.package.rust-version",
+        "workspace.package.license",
+        "workspace.lints",
+        "profile.dev"
+      ]
+    },
+    "clippy.toml": {
+      "kind": "managed"
+    },
+    "justfile": {
+      "kind": "blocks",
+      "ids": [
+        "rust-monorepo"
+      ]
+    },
+    "rust-toolchain.toml": {
+      "kind": "managed"
+    },
+    "rustfmt.toml": {
+      "kind": "managed"
+    }
+  }
+}
