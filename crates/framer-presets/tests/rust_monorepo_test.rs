@@ -235,6 +235,24 @@ fn release_plz_publishes_with_trusted_publishing() -> Result<()> {
 }
 
 #[test]
+fn release_plz_setup_steps_run_before_both_jobs_build() -> Result<()> {
+    let release_plz = ReleasePlz::new().setup(system_libraries());
+
+    let fs = render_preset(RustMonorepo::new().release(Release::new().release_plz(release_plz)))?;
+
+    let workflow = file(&fs, ".github/workflows/release-plz.yml");
+    let pr_start = workflow
+        .find("  release-plz-pr:\n")
+        .unwrap_or(workflow.len());
+    for job in [&workflow[..pr_start], &workflow[pr_start..]] {
+        let setup = job.find("Install system libraries");
+        let release_plz = job.find("uses: release-plz/action@");
+        assert!(setup.is_some() && setup < release_plz, "{job}");
+    }
+    Ok(())
+}
+
+#[test]
 fn dist_adds_config_profile_tool_recipes_and_a_ci_check() -> Result<()> {
     let fs = render_preset(
         RustMonorepo::new()

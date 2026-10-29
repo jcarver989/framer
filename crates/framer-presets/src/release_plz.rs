@@ -22,6 +22,7 @@ const CONFIG: &str = "release-plz.toml";
 #[derive(Clone, Debug)]
 pub struct ReleasePlz {
     settings: Vec<(String, Value)>,
+    setup: Vec<Step>,
     crates_io: bool,
     app_token_secrets: Option<(String, String)>,
 }
@@ -36,6 +37,7 @@ impl ReleasePlz {
     pub fn new() -> Self {
         Self {
             settings: Vec::new(),
+            setup: Vec::new(),
             crates_io: false,
             app_token_secrets: Some((
                 "RELEASE_AUTOMATION_APP_ID".into(),
@@ -61,6 +63,13 @@ impl ReleasePlz {
             Some(setting) => setting.1 = value,
             None => self.settings.push((key.into(), value)),
         }
+        self
+    }
+
+    /// A step to run before release-plz builds the crates in both jobs, such
+    /// as installing system libraries that publishing and semver checks need.
+    pub fn setup(mut self, step: Step) -> Self {
+        self.setup.push(step);
         self
     }
 
@@ -147,6 +156,7 @@ impl ReleasePlz {
                     .with("token", token),
             )
             .step(rust_cache());
+        job = self.setup.iter().cloned().fold(job, Job::step);
         if self.crates_io && command == "release" {
             job = job.step(
                 Step::uses(CRATES_IO_AUTH_ACTION)
