@@ -7,6 +7,3 @@ publish = false
 [dependencies]
 framer = { path = "../crates/framer" }
 framer-presets = { path = "../crates/framer-presets" }
-
-# Keeps this crate out of the repository's own workspace.
-[workspace]
