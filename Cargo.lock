@@ -173,6 +173,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "framer-project"
+version = "0.0.0"
+dependencies = [
+ "framer",
+ "framer-presets",
+]
+
+[[package]]
 name = "getrandom"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
