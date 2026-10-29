@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1](https://github.com/jcarver989/framer/compare/cargo-framer-v0.2.0...cargo-framer-v0.2.1) - 2026-10-29
+
+### Other
+
+- update Cargo.lock dependencies
+
 ## [0.2.0](https://github.com/jcarver989/framer/compare/cargo-framer-v0.1.0...cargo-framer-v0.2.0) - 2026-10-26
 
 ### Added
