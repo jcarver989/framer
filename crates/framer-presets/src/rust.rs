@@ -13,12 +13,12 @@ pub struct Rust {
 
 impl Default for Rust {
     fn default() -> Self {
-        Self::new("1.98")
+        Self::new("1.100")
     }
 }
 
 impl Rust {
-    /// The minimum supported Rust version, such as `1.98`. Also pins the
+    /// The minimum supported Rust version, such as `1.100`. Also pins the
     /// toolchain to its first release, unless [`Rust::toolchain`] says otherwise.
     pub fn new(msrv: &str) -> Self {
         Self {

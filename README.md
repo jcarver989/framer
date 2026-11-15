@@ -11,11 +11,11 @@ use std::process::ExitCode;
 
 fn main() -> ExitCode {
     let mut project = Project::new();
-    project.add(Toolchain::pinned("1.98.0").components(["clippy", "rustfmt"]));
+    project.add(Toolchain::pinned("1.100.0").components(["clippy", "rustfmt"]));
     project.add(
         CargoWorkspace::new()
             .edition(Edition::E2024)
-            .rust_version("1.98")
+            .rust_version("1.100")
             .lints(Lints::clippy_pedantic().allow_clippy(["missing_errors_doc"])),
     );
     project.add(
@@ -78,7 +78,7 @@ pub struct TeamRust {
 
 impl TeamRust {
     pub fn new() -> Self {
-        Self { msrv: "1.98".into() }
+        Self { msrv: "1.100".into() }
     }
 
     pub fn msrv(mut self, msrv: &str) -> Self {

@@ -8,12 +8,12 @@
 //!
 //! impl Preset for MyRust {
 //!     fn apply(self, project: &mut Project) {
-//!         project.add(Toolchain::pinned("1.98.0"));
+//!         project.add(Toolchain::pinned("1.100.0"));
 //!     }
 //! }
 //!
 //! let files = framer::testing::render_preset(MyRust).unwrap();
-//! assert!(files.get("rust-toolchain.toml").unwrap().contains("channel = \"1.98.0\""));
+//! assert!(files.get("rust-toolchain.toml").unwrap().contains("channel = \"1.100.0\""));
 //! ```
 
 use crate::error::Result;
