@@ -31,9 +31,9 @@ fn generates_the_whole_setup() -> Result<()> {
     );
     assert!(
         file(&fs, "rust-toolchain.toml")
-            .contains("channel = \"1.98.0\"\ncomponents = [\"clippy\", \"rustfmt\"]\n")
+            .contains("channel = \"1.100.0\"\ncomponents = [\"clippy\", \"rustfmt\"]\n")
     );
-    assert!(file(&fs, "clippy.toml").ends_with("msrv = \"1.98\"\n"));
+    assert!(file(&fs, "clippy.toml").ends_with("msrv = \"1.100\"\n"));
     assert!(
         file(&fs, ".tool-versions")
             .ends_with("just 1.58.0\naqua:nextest-rs/nextest/cargo-nextest 0.9.144\n")

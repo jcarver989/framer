@@ -45,7 +45,7 @@ pub struct Toolchain {
 }
 
 impl Toolchain {
-    /// A toolchain pinned to an exact release, such as `1.98.0`.
+    /// A toolchain pinned to an exact release, such as `1.100.0`.
     pub fn pinned(version: impl Into<String>) -> Self {
         Self {
             channel: version.into(),

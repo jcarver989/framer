@@ -18,7 +18,7 @@ struct TeamRust {
 
 impl TeamRust {
     fn new() -> Self {
-        Self { msrv: "1.98" }
+        Self { msrv: "1.100" }
     }
 }
 
@@ -57,7 +57,7 @@ fn generates_managed_files_with_a_header_and_makes_them_readonly() {
     assert_eq!(
         fs.get("rust-toolchain.toml").unwrap(),
         format!(
-            "{HEADER}[toolchain]\nchannel = \"1.98.0\"\ncomponents = [\"clippy\"]\nprofile = \"minimal\"\n"
+            "{HEADER}[toolchain]\nchannel = \"1.100.0\"\ncomponents = [\"clippy\"]\nprofile = \"minimal\"\n"
         )
     );
     assert!(is_readonly(&fs, "rust-toolchain.toml"));
@@ -113,7 +113,7 @@ fn keeps_the_parts_of_partly_generated_files_it_does_not_own() {
 
             [workspace.package]
             edition = "2024"
-            rust-version = "1.98"
+            rust-version = "1.100"
 
             [workspace.lints.clippy]
             all = { level = "warn", priority = -1 }
@@ -264,7 +264,7 @@ fn projects_can_change_what_a_preset_set_up() {
     );
     let cargo = fs.get("Cargo.toml").unwrap();
     assert!(cargo.contains("[profile.dist]\ninherits = \"release\"\ncodegen-units = 1\n"));
-    assert!(cargo.contains("rust-version = \"1.98\"\npublish = false\n"));
+    assert!(cargo.contains("rust-version = \"1.100\"\npublish = false\n"));
     assert!(
         fs.get("rust-toolchain.toml")
             .unwrap()

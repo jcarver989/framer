@@ -302,7 +302,7 @@ pub(crate) fn run(
         planned: Vec::new(),
     };
     for path in &paths {
-        let file_overrides = overrides.get(path).map(Vec::as_slice).unwrap_or_default();
+        let file_overrides = overrides.get(path).map_or_default(Vec::as_slice);
         if unmanaged.contains(path) {
             planner.release(path)?;
             continue;

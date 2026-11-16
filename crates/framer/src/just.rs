@@ -71,16 +71,9 @@ impl Recipe {
     }
 
     fn render(&self) -> String {
-        let suffixed = |part: &Option<String>| {
-            part.as_ref()
-                .map(|part| format!(" {part}"))
-                .unwrap_or_default()
-        };
-        let doc = self
-            .doc
-            .as_ref()
-            .map(|doc| format!("# {doc}\n"))
-            .unwrap_or_default();
+        let suffixed =
+            |part: &Option<String>| part.as_ref().map_or_default(|part| format!(" {part}"));
+        let doc = self.doc.as_ref().map_or_default(|doc| format!("# {doc}\n"));
         let header = format!(
             "{}{}:{}\n",
             self.name,
