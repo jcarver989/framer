@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3](https://github.com/jcarver989/framer/compare/cargo-framer-v0.2.2...cargo-framer-v0.2.3) - 2026-11-17
+
+### Added
+
+- fail lint on Cargo warnings and generate a Dependabot config; fix init's framer version ([#10](https://github.com/jcarver989/framer/pull/10))
+
 ## [0.2.2](https://github.com/jcarver989/framer/compare/cargo-framer-v0.2.1...cargo-framer-v0.2.2) - 2026-11-16
 
 ### Added
