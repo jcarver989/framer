@@ -133,7 +133,7 @@ project.apply(
 );
 ```
 
-Each theme takes one config struct whose `new()` holds the preset's defaults (`Rust::new` takes just the MSRV): `.rust(Rust)`, `.workspace(Workspace)`, `.lints(Lints)`, `.rustfmt(Rustfmt)`, `.tools(Tools)`, `.ci(Ci)` and `.release(Release)`. It also takes `.without_ci()` and `.without_conventions()`. A repository can also publish its own preset from its `.framer/` crate, as a library next to the binary, for sibling repositories to depend on by path.
+Each theme takes one config struct whose `new()` holds the preset's defaults (`Rust::new` takes just the MSRV): `.rust(Rust)`, `.workspace(Workspace)`, `.lints(Lints)`, `.rustfmt(Rustfmt)`, `.tools(Tools)`, `.ci(Ci)`, `.dependabot(Dependabot)` and `.release(Release)`. It also takes `.without_ci()`, `.without_dependabot()` and `.without_conventions()`. A repository can also publish its own preset from its `.framer/` crate, as a library next to the binary, for sibling repositories to depend on by path.
 
 Bumping the preset's version in a repository and running `cargo framer` rolls out the change. Test presets without touching the disk using `framer::testing::render_preset`, which generates into an in-memory `MemoryFs`.
 

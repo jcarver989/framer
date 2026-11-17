@@ -1,5 +1,5 @@
-use framer::github::{Job, Step, Triggers, Workflow};
-use framer::rust::{CargoWorkspace, Edition, Profile};
+use framer::github::{Dependabot, DependabotUpdate, Job, Step, Triggers, Workflow};
+use framer::rust::{CargoWorkspace, Edition, Level, Lints, Profile};
 use framer::testing::{render, render_into};
 use framer::{MemoryFs, Mode, Project, TextFile, TomlKeys};
 use indoc::indoc;
@@ -50,6 +50,96 @@ fn profiles_can_have_per_package_settings() {
         [profile.dev.package."*"]
         debug = false
     "#}));
+}
+
+#[test]
+fn cargo_lints_go_after_rustc_and_clippy_lints() {
+    let mut project = Project::new();
+    project.add(
+        CargoWorkspace::new().lints(
+            Lints::new()
+                .cargo_group("pedantic", Level::Warn)
+                .cargo("unused_dependencies", Level::Deny)
+                .clippy_group("pedantic", Level::Warn)
+                .rust("unsafe_code", Level::Deny),
+        ),
+    );
+
+    let fs = render(&project).unwrap();
+
+    assert!(fs.get("Cargo.toml").unwrap().ends_with(indoc! {r#"
+        [workspace.lints.rust]
+        unsafe_code = "deny"
+
+        [workspace.lints.clippy]
+        pedantic = { level = "warn", priority = -1 }
+
+        [workspace.lints.cargo]
+        pedantic = { level = "warn", priority = -1 }
+        unused_dependencies = "deny"
+    "#}));
+}
+
+#[test]
+fn dependabot_updates_each_ecosystem_on_its_schedule() {
+    let mut project = Project::new();
+    project.add(
+        Dependabot::new()
+            .update(
+                DependabotUpdate::new("cargo")
+                    .cooldown_days(7)
+                    .commit_message_prefix("chore(deps):")
+                    .group("cargo-minor-patch", ["minor", "patch"]),
+            )
+            .update(
+                DependabotUpdate::new("github-actions")
+                    .directory("/.github/actions/setup")
+                    .interval("daily"),
+            ),
+    );
+
+    let fs = render(&project).unwrap();
+
+    assert!(
+        fs.get(".github/dependabot.yml")
+            .unwrap()
+            .ends_with(indoc! {r#"
+        version: 2
+        updates:
+          - package-ecosystem: cargo
+            directory: /
+            schedule:
+              interval: weekly
+            cooldown:
+              default-days: 7
+            commit-message:
+              prefix: "chore(deps):"
+            groups:
+              cargo-minor-patch:
+                update-types: [minor, patch]
+                patterns: ["*"]
+          - package-ecosystem: github-actions
+            directory: /.github/actions/setup
+            schedule:
+              interval: daily
+    "#})
+    );
+}
+
+#[test]
+fn a_dependabot_update_replaces_the_one_for_the_same_ecosystem_and_directory() {
+    let mut project = Project::new();
+    project.add(
+        Dependabot::new()
+            .update(DependabotUpdate::new("cargo"))
+            .update(DependabotUpdate::new("cargo").interval("daily")),
+    );
+
+    let fs = render(&project).unwrap();
+
+    let config = fs.get(".github/dependabot.yml").unwrap();
+    assert_eq!(config.matches("package-ecosystem").count(), 1);
+    assert!(config.contains("interval: daily\n"));
 }
 
 #[test]

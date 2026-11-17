@@ -17,9 +17,9 @@ test profile="default":
 # Run tests with nextest's CI profile, which writes JUnit results
 test-ci: (test "ci")
 
-# Run Clippy, failing on any warning
+# Run Clippy, failing on any rustc, Clippy or Cargo warning
 lint:
-    cargo clippy --workspace --all-targets --all-features -- -D warnings
+    CARGO_BUILD_WARNINGS=deny cargo clippy --workspace --all-targets --all-features
 
 # Format all code
 fmt:

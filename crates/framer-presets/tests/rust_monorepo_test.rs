@@ -1,4 +1,4 @@
-use framer::github::{Job, Step};
+use framer::github::{Dependabot, DependabotUpdate, Job, Step};
 use framer::just::Justfile;
 use framer::rust::{Level, Lints, Profile};
 use framer::testing::{render, render_into, render_preset};
@@ -18,6 +18,7 @@ fn generates_the_whole_setup() -> Result<()> {
         [
             ".config/nextest.toml",
             ".framer/manifest.json",
+            ".github/dependabot.yml",
             ".github/workflows/ci.yml",
             ".gitignore",
             ".tool-versions",
@@ -98,6 +99,9 @@ fn workspace_lints_and_profiles() -> Result<()> {
         must_use_candidate = "allow"
         return_self_not_must_use = "allow"
 
+        [workspace.lints.cargo]
+        pedantic = { level = "warn", priority = -1 }
+
         [profile.dev]
         debug = "line-tables-only"
 
@@ -121,6 +125,55 @@ fn ci_runs_the_same_recipes_as_local_development() -> Result<()> {
     }
     assert!(ci.contains("uses: jdx/mise-action@v5.2.0"));
     assert!(!ci.contains("dist"));
+    Ok(())
+}
+
+#[test]
+fn lint_fails_on_cargo_warnings_as_well_as_rustc_and_clippy_warnings() -> Result<()> {
+    let fs = render_preset(RustMonorepo::new())?;
+
+    assert!(file(&fs, "justfile").contains(indoc! {"
+        # Run Clippy, failing on any rustc, Clippy or Cargo warning
+        lint:
+            CARGO_BUILD_WARNINGS=deny cargo clippy --workspace --all-targets --all-features
+    "}));
+    Ok(())
+}
+
+#[test]
+fn dependabot_proposes_cargo_updates_a_week_after_release() -> Result<()> {
+    let fs = render_preset(RustMonorepo::new())?;
+
+    assert!(file(&fs, ".github/dependabot.yml").ends_with(indoc! {r#"
+        version: 2
+        updates:
+          - package-ecosystem: cargo
+            directory: /
+            schedule:
+              interval: weekly
+            cooldown:
+              default-days: 7
+            commit-message:
+              prefix: "chore(deps):"
+            groups:
+              cargo-minor-patch:
+                update-types: [minor, patch]
+                patterns: ["*"]
+    "#}));
+    Ok(())
+}
+
+#[test]
+fn dependabot_is_configurable_and_optional() -> Result<()> {
+    let custom = render_preset(
+        RustMonorepo::new()
+            .dependabot(Dependabot::new().update(DependabotUpdate::new("cargo").interval("daily"))),
+    )?;
+    let without = render_preset(RustMonorepo::new().without_dependabot())?;
+
+    assert!(file(&custom, ".github/dependabot.yml").contains("interval: daily\n"));
+    assert!(!file(&custom, ".github/dependabot.yml").contains("cooldown"));
+    assert_eq!(without.get(".github/dependabot.yml"), None);
     Ok(())
 }
 
@@ -363,7 +416,7 @@ fn extra_manifests_are_linted_and_formatted() -> Result<()> {
 
     let justfile = file(&fs, "justfile");
     assert!(justfile.contains(
-        "    cargo clippy --manifest-path tests/fixture/Cargo.toml --target-dir target --all-targets --all-features -- -D warnings\n"
+        "    CARGO_BUILD_WARNINGS=deny cargo clippy --manifest-path tests/fixture/Cargo.toml --target-dir target --all-targets --all-features\n"
     ));
     assert!(justfile.contains("    cargo fmt --manifest-path tests/fixture/Cargo.toml\n"));
     assert!(

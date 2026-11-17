@@ -7,3 +7,6 @@ publish = false
 [dependencies]
 framer = { path = "../crates/framer" }
 framer-presets = { path = "../crates/framer-presets" }
+
+[lints]
+workspace = true
