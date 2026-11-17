@@ -3,6 +3,9 @@
     ".config/nextest.toml": {
       "kind": "managed"
     },
+    ".github/dependabot.yml": {
+      "kind": "managed"
+    },
     ".github/workflows/ci.yml": {
       "kind": "managed"
     },

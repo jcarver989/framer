@@ -1,4 +1,5 @@
 use crate::{Ci, Dist, Release, Rust, Rustfmt, Tools, Workspace};
+use framer::github::{Dependabot, DependabotUpdate};
 use framer::just::{Justfile, Recipe};
 use framer::rust::{CargoWorkspace, Level, Lints};
 use framer::toml_edit::{InlineTable, Value};
@@ -44,6 +45,7 @@ pub struct RustMonorepo {
     rustfmt: Rustfmt,
     tools: Tools,
     ci: Option<Ci>,
+    dependabot: Option<Dependabot>,
     conventions: bool,
     release: Release,
 }
@@ -67,10 +69,19 @@ impl RustMonorepo {
                     "return_self_not_must_use",
                 ])
                 .rust("unsafe_code", Level::Deny)
-                .rust("unreachable_pub", Level::Warn),
+                .rust("unreachable_pub", Level::Warn)
+                .cargo_group("pedantic", Level::Warn),
             rustfmt: Rustfmt::new(),
             tools: Tools::new(),
             ci: Some(Ci::new()),
+            dependabot: Some(
+                Dependabot::new().update(
+                    DependabotUpdate::new("cargo")
+                        .cooldown_days(7)
+                        .commit_message_prefix("chore(deps):")
+                        .group("cargo-minor-patch", ["minor", "patch"]),
+                ),
+            ),
             conventions: true,
             release: Release::new(),
         }
@@ -111,6 +122,16 @@ impl RustMonorepo {
     /// or that write their own.
     pub fn without_ci(mut self) -> Self {
         self.ci = None;
+        self
+    }
+
+    pub fn dependabot(mut self, dependabot: Dependabot) -> Self {
+        self.dependabot = Some(dependabot);
+        self
+    }
+
+    pub fn without_dependabot(mut self) -> Self {
+        self.dependabot = None;
         self
     }
 
@@ -171,8 +192,10 @@ impl RustMonorepo {
     fn justfile(&self) -> Justfile {
         let manifests = self.workspace.extra_manifest_paths();
         let mut lint = Recipe::new("lint")
-            .doc("Run Clippy, failing on any warning")
-            .line("cargo clippy --workspace --all-targets --all-features -- -D warnings");
+            .doc("Run Clippy, failing on any rustc, Clippy or Cargo warning")
+            .line(
+                "CARGO_BUILD_WARNINGS=deny cargo clippy --workspace --all-targets --all-features",
+            );
         let mut fmt = Recipe::new("fmt")
             .doc("Format all code")
             .line("cargo fmt --all");
@@ -181,7 +204,7 @@ impl RustMonorepo {
             .line("cargo fmt --all -- --check");
         for manifest in manifests {
             lint = lint.line(format!(
-                "cargo clippy --manifest-path {manifest} --target-dir target --all-targets --all-features -- -D warnings"
+                "CARGO_BUILD_WARNINGS=deny cargo clippy --manifest-path {manifest} --target-dir target --all-targets --all-features"
             ));
             fmt = fmt.line(format!("cargo fmt --manifest-path {manifest}"));
             fmt_check = fmt_check.line(format!("cargo fmt --manifest-path {manifest} -- --check"));
@@ -241,6 +264,9 @@ impl Preset for RustMonorepo {
                 Some(job) => workflow.job(job),
                 None => workflow,
             });
+        }
+        if let Some(dependabot) = &self.dependabot {
+            project.add(dependabot.clone());
         }
         project.add(TextBlock::new(
             ".gitignore",

@@ -150,7 +150,7 @@ fn framer_dependency(args: &InitArgs) -> String {
     if let Some(url) = &args.framer_git {
         return format!("framer = {{ git = \"{url}\" }}");
     }
-    format!("framer = \"{}\"", env!("CARGO_PKG_VERSION"))
+    format!("framer = \"{}\"", framer::VERSION)
 }
 
 fn cargo_toml(dependency: &str) -> String {
@@ -203,6 +203,7 @@ fn eject() -> Result<ExitCode, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use framer::toml_edit::DocumentMut;
     use tempfile::TempDir;
 
     fn init_args() -> InitArgs {
@@ -225,9 +226,15 @@ mod tests {
 
     #[test]
     fn depends_on_framer_from_crates_io_by_default() {
+        let manifest =
+            fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../framer/Cargo.toml"))
+                .unwrap();
+        let manifest: DocumentMut = manifest.parse().unwrap();
+        let version = manifest["package"]["version"].as_str().unwrap();
+
         assert_eq!(
             framer_dependency(&init_args()),
-            format!("framer = \"{}\"", env!("CARGO_PKG_VERSION"))
+            format!("framer = \"{version}\"")
         );
     }
 

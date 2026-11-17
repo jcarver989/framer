@@ -127,6 +127,7 @@ struct Lint {
 pub struct Lints {
     rust: Vec<Lint>,
     clippy: Vec<Lint>,
+    cargo: Vec<Lint>,
 }
 
 /// Lint groups get a lower priority so individual lints can override them.
@@ -214,6 +215,26 @@ impl Lints {
         self
     }
 
+    pub fn cargo(mut self, name: impl Into<String>, level: Level) -> Self {
+        let lint = Lint {
+            name: name.into(),
+            level,
+            priority: None,
+        };
+        upsert(&mut self.cargo, lint);
+        self
+    }
+
+    pub fn cargo_group(mut self, name: impl Into<String>, level: Level) -> Self {
+        let lint = Lint {
+            name: name.into(),
+            level,
+            priority: Some(GROUP_PRIORITY),
+        };
+        upsert(&mut self.cargo, lint);
+        self
+    }
+
     fn to_item(&self) -> Item {
         let mut table = Table::new();
         table.set_implicit(true);
@@ -222,6 +243,9 @@ impl Lints {
         }
         if !self.clippy.is_empty() {
             table.insert("clippy", Item::Table(lints_table(&self.clippy)));
+        }
+        if !self.cargo.is_empty() {
+            table.insert("cargo", Item::Table(lints_table(&self.cargo)));
         }
         Item::Table(table)
     }

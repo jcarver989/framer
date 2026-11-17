@@ -533,3 +533,127 @@ impl Component for Ci {
         workflow.synthesize(output)
     }
 }
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct Dependabot {
+    updates: Vec<DependabotUpdate>,
+}
+
+impl Dependabot {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn update(mut self, update: DependabotUpdate) -> Self {
+        match self.updates.iter_mut().find(|existing| {
+            existing.ecosystem == update.ecosystem && existing.directory == update.directory
+        }) {
+            Some(existing) => *existing = update,
+            None => self.updates.push(update),
+        }
+        self
+    }
+
+    fn to_yaml(&self) -> Yaml {
+        Yaml::map().with("version", 2_u32).with(
+            "updates",
+            Yaml::Seq(self.updates.iter().map(DependabotUpdate::to_yaml).collect()),
+        )
+    }
+}
+
+impl Component for Dependabot {
+    fn synthesize(&self, output: &mut Output) -> Result<()> {
+        output.managed(".github/dependabot.yml", self.to_yaml().to_yaml_string())
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DependabotUpdate {
+    ecosystem: String,
+    directory: String,
+    interval: String,
+    cooldown_days: Option<u32>,
+    commit_message_prefix: Option<String>,
+    groups: Vec<(String, Vec<String>)>,
+}
+
+impl DependabotUpdate {
+    pub fn new(ecosystem: impl Into<String>) -> Self {
+        Self {
+            ecosystem: ecosystem.into(),
+            directory: "/".into(),
+            interval: "weekly".into(),
+            cooldown_days: None,
+            commit_message_prefix: None,
+            groups: Vec::new(),
+        }
+    }
+
+    pub fn directory(mut self, directory: impl Into<String>) -> Self {
+        self.directory = directory.into();
+        self
+    }
+
+    pub fn interval(mut self, interval: impl Into<String>) -> Self {
+        self.interval = interval.into();
+        self
+    }
+
+    pub fn cooldown_days(mut self, days: u32) -> Self {
+        self.cooldown_days = Some(days);
+        self
+    }
+
+    pub fn commit_message_prefix(mut self, prefix: impl Into<String>) -> Self {
+        self.commit_message_prefix = Some(prefix.into());
+        self
+    }
+
+    pub fn group<T: Into<String>>(
+        mut self,
+        name: impl Into<String>,
+        update_types: impl IntoIterator<Item = T>,
+    ) -> Self {
+        let update_types = update_types.into_iter().map(Into::into).collect();
+        let name = name.into();
+        match self
+            .groups
+            .iter_mut()
+            .find(|(existing, _)| *existing == name)
+        {
+            Some(group) => group.1 = update_types,
+            None => self.groups.push((name, update_types)),
+        }
+        self
+    }
+
+    fn to_yaml(&self) -> Yaml {
+        let groups = self
+            .groups
+            .iter()
+            .map(|(name, update_types)| {
+                let group = Yaml::map()
+                    .with("update-types", update_types.clone())
+                    .with("patterns", vec!["*".to_owned()]);
+                (name.clone(), group)
+            })
+            .collect::<Vec<_>>();
+        Yaml::map()
+            .with("package-ecosystem", &self.ecosystem)
+            .with("directory", &self.directory)
+            .with("schedule", Yaml::map().with("interval", &self.interval))
+            .with_some(
+                "cooldown",
+                self.cooldown_days
+                    .map(|days| Yaml::map().with("default-days", days)),
+            )
+            .with_some(
+                "commit-message",
+                self.commit_message_prefix
+                    .as_ref()
+                    .map(|prefix| Yaml::map().with("prefix", prefix)),
+            )
+            .with_some("groups", (!groups.is_empty()).then_some(Yaml::Map(groups)))
+    }
+}
