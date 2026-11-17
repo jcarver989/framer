@@ -215,7 +215,6 @@ impl Lints {
         self
     }
 
-    /// A lint Cargo checks in manifests, such as `unused_dependencies`.
     pub fn cargo(mut self, name: impl Into<String>, level: Level) -> Self {
         let lint = Lint {
             name: name.into(),
@@ -226,7 +225,6 @@ impl Lints {
         self
     }
 
-    /// A group of Cargo's lints, such as `pedantic`.
     pub fn cargo_group(mut self, name: impl Into<String>, level: Level) -> Self {
         let lint = Lint {
             name: name.into(),

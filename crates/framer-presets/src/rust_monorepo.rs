@@ -16,9 +16,9 @@ const CONVENTIONS: &str = include_str!("conventions.md");
 ///
 /// - `rust-toolchain.toml`, pinned, with Clippy and rustfmt.
 /// - The workspace settings in `Cargo.toml`: members, edition 2024, the MSRV,
-///   the license, lints (Clippy `all` and `pedantic`, Cargo `pedantic`,
-///   `unsafe_code` denied, `unreachable_pub` warned) and a faster-building
-///   `dev` profile. Dependencies stay yours.
+///   the license, lints (Clippy `all` and `pedantic`, `unsafe_code` denied,
+///   `unreachable_pub` warned) and a faster-building `dev` profile. Dependencies
+///   stay yours.
 /// - `clippy.toml`, `rustfmt.toml` and `.config/nextest.toml`, which requires
 ///   the nextest version pinned in `.tool-versions`.
 /// - `.tool-versions`, so mise installs `just` and `cargo-nextest`.
@@ -27,17 +27,13 @@ const CONVENTIONS: &str = include_str!("conventions.md");
 ///   Change them with `project.get_mut::<Justfile>()`, and keep your own
 ///   recipes outside the block.
 /// - `.github/workflows/ci.yml`, running formatting, Clippy, tests, docs and
-///   the generated-files check through those recipes. `lint` fails on Cargo's
-///   own warnings too, such as unused dependencies.
-/// - `.github/dependabot.yml`, proposing Cargo dependency updates weekly, a
-///   week after they're released, with minor and patch updates grouped.
+///   the generated-files check through those recipes.
 /// - Blocks in `.gitignore` and `AGENTS.md`, the latter with coding and
 ///   testing conventions for people and agents.
 ///
 /// Each theme is configured with one setter taking one config struct, whose
 /// `new()` holds the preset's defaults: [`Rust`], [`Workspace`], [`Lints`],
-/// [`Rustfmt`], [`Tools`], [`Ci`] and [`Dependabot`]. [`Rust::new`] takes
-/// just the MSRV.
+/// [`Rustfmt`], [`Tools`] and [`Ci`]. [`Rust::new`] takes just the MSRV.
 /// Passing one replaces that theme.
 ///
 /// Release automation is opt-in, with [`RustMonorepo::release`].
@@ -134,8 +130,6 @@ impl RustMonorepo {
         self
     }
 
-    /// Generates no Dependabot config, for repositories that update
-    /// dependencies another way, or write their own.
     pub fn without_dependabot(mut self) -> Self {
         self.dependabot = None;
         self
@@ -197,8 +191,6 @@ impl RustMonorepo {
 
     fn justfile(&self) -> Justfile {
         let manifests = self.workspace.extra_manifest_paths();
-        // `-D warnings` only reaches rustc; `build.warnings` also fails on
-        // Cargo's own lints, such as unused dependencies.
         let mut lint = Recipe::new("lint")
             .doc("Run Clippy, failing on any rustc, Clippy or Cargo warning")
             .line(

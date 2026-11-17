@@ -64,5 +64,4 @@ pub use synth::{ChangeKind, FileChange, Mode, Report, eject};
 pub use toml_edit;
 pub use toml_patch::KeyPath;
 
-/// This crate's version, which `cargo framer init` pins new projects to.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

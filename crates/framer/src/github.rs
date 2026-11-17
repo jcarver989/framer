@@ -534,17 +534,6 @@ impl Component for Ci {
     }
 }
 
-/// `.github/dependabot.yml`: the dependencies Dependabot keeps up to date.
-///
-/// ```
-/// use framer::github::{Dependabot, DependabotUpdate};
-///
-/// let dependabot = Dependabot::new().update(
-///     DependabotUpdate::new("cargo")
-///         .cooldown_days(7)
-///         .group("cargo-minor-patch", ["minor", "patch"]),
-/// );
-/// ```
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Dependabot {
     updates: Vec<DependabotUpdate>,
@@ -555,7 +544,6 @@ impl Dependabot {
         Self::default()
     }
 
-    /// Adds an update, replacing any for the same ecosystem and directory.
     pub fn update(mut self, update: DependabotUpdate) -> Self {
         match self.updates.iter_mut().find(|existing| {
             existing.ecosystem == update.ecosystem && existing.directory == update.directory
@@ -580,8 +568,6 @@ impl Component for Dependabot {
     }
 }
 
-/// One package ecosystem, such as `cargo`, in one directory, checked weekly
-/// unless [`DependabotUpdate::interval`] says otherwise.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DependabotUpdate {
     ecosystem: String,
@@ -593,7 +579,6 @@ pub struct DependabotUpdate {
 }
 
 impl DependabotUpdate {
-    /// Updates for `ecosystem` in the repository's root directory.
     pub fn new(ecosystem: impl Into<String>) -> Self {
         Self {
             ecosystem: ecosystem.into(),
@@ -605,32 +590,26 @@ impl DependabotUpdate {
         }
     }
 
-    /// The directory holding the manifests, such as `/.github/actions/setup`.
     pub fn directory(mut self, directory: impl Into<String>) -> Self {
         self.directory = directory.into();
         self
     }
 
-    /// How often to check, such as `daily`, `weekly` or `monthly`.
     pub fn interval(mut self, interval: impl Into<String>) -> Self {
         self.interval = interval.into();
         self
     }
 
-    /// Waits this many days after a version is released before proposing it.
     pub fn cooldown_days(mut self, days: u32) -> Self {
         self.cooldown_days = Some(days);
         self
     }
 
-    /// Starts commit messages with `prefix`, such as `chore(deps):`.
     pub fn commit_message_prefix(mut self, prefix: impl Into<String>) -> Self {
         self.commit_message_prefix = Some(prefix.into());
         self
     }
 
-    /// Proposes every dependency's updates of these types, such as `minor`
-    /// and `patch`, in one pull request named `name`.
     pub fn group<T: Into<String>>(
         mut self,
         name: impl Into<String>,
