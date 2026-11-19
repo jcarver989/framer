@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4](https://github.com/jcarver989/framer/compare/framer-presets-v0.1.3...framer-presets-v0.1.4) - 2026-11-19
+
+### Fixed
+
+- *(presets)* authenticate release-plz's GitHub App by client ID
+
 ## [0.1.3](https://github.com/jcarver989/framer/compare/framer-presets-v0.1.2...framer-presets-v0.1.3) - 2026-11-17
 
 ### Added
