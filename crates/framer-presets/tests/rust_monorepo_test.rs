@@ -247,7 +247,7 @@ fn release_plz_owns_only_its_workspace_settings() -> Result<()> {
         "#}
     );
     let workflow = file(&fs, ".github/workflows/release-plz.yml");
-    assert!(workflow.contains("app-id: ${{ secrets.RELEASE_AUTOMATION_APP_ID }}"));
+    assert!(workflow.contains("client-id: ${{ secrets.RELEASE_AUTOMATION_APP_CLIENT_ID }}"));
     assert!(workflow.contains("needs: [release-plz-release]"));
     assert!(!workflow.contains("CARGO_REGISTRY_TOKEN"));
     Ok(())

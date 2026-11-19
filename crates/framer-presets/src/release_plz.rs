@@ -16,7 +16,7 @@ const CONFIG: &str = "release-plz.toml";
 /// release PR on every push to `main` and tags releases once it's merged.
 ///
 /// By default the workflow uses a GitHub App token, from the
-/// `RELEASE_AUTOMATION_APP_ID` and `RELEASE_AUTOMATION_APP_PRIVATE_KEY` secrets,
+/// `RELEASE_AUTOMATION_APP_CLIENT_ID` and `RELEASE_AUTOMATION_APP_PRIVATE_KEY` secrets,
 /// because tags pushed with the default `GITHUB_TOKEN` don't start other
 /// workflows, such as the release workflow `dist` generates.
 #[derive(Clone, Debug)]
@@ -40,7 +40,7 @@ impl ReleasePlz {
             setup: Vec::new(),
             crates_io: false,
             app_token_secrets: Some((
-                "RELEASE_AUTOMATION_APP_ID".into(),
+                "RELEASE_AUTOMATION_APP_CLIENT_ID".into(),
                 "RELEASE_AUTOMATION_APP_PRIVATE_KEY".into(),
             )),
         }
@@ -83,9 +83,9 @@ impl ReleasePlz {
         self
     }
 
-    /// The secrets holding the GitHub App's id and private key.
-    pub fn app_token_secrets(mut self, app_id: &str, private_key: &str) -> Self {
-        self.app_token_secrets = Some((app_id.into(), private_key.into()));
+    /// The secrets holding the GitHub App's client ID and private key.
+    pub fn app_token_secrets(mut self, client_id: &str, private_key: &str) -> Self {
+        self.app_token_secrets = Some((client_id.into(), private_key.into()));
         self
     }
 
@@ -133,12 +133,12 @@ impl ReleasePlz {
             None => "${{ secrets.GITHUB_TOKEN }}",
         };
         let mut job = Job::new(id).name(name);
-        if let Some((app_id, private_key)) = &self.app_token_secrets {
+        if let Some((client_id, private_key)) = &self.app_token_secrets {
             job = job.step(
                 Step::uses(APP_TOKEN_ACTION)
                     .name("Generate release automation app token")
                     .id("app-token")
-                    .with("app-id", format!("${{{{ secrets.{app_id} }}}}"))
+                    .with("client-id", format!("${{{{ secrets.{client_id} }}}}"))
                     .with("private-key", format!("${{{{ secrets.{private_key} }}}}"))
                     .with("owner", "${{ github.repository_owner }}")
                     .with("repositories", "${{ github.event.repository.name }}"),
