@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5](https://github.com/jcarver989/framer/compare/framer-presets-v0.1.4...framer-presets-v0.1.5) - 2026-11-20
+
+### Added
+
+- *(presets)* default Rust monorepos to mise tasks ([#14](https://github.com/jcarver989/framer/pull/14))
+
 ## [0.1.4](https://github.com/jcarver989/framer/compare/framer-presets-v0.1.3...framer-presets-v0.1.4) - 2026-11-19
 
 ### Fixed
