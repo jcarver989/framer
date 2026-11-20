@@ -27,6 +27,7 @@ mod release_plz;
 mod rust;
 mod rust_monorepo;
 mod rustfmt;
+mod tasks;
 mod tools;
 mod workspace;
 

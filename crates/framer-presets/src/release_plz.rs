@@ -3,7 +3,7 @@ use framer::github::{Job, Step, Triggers, Workflow};
 use framer::toml_edit::Value;
 use framer::{Project, TomlKeys};
 
-const ACTION: &str = "release-plz/action@v0.5.142";
+const ACTION: &str = "release-plz/action@v0.5.148";
 const APP_TOKEN_ACTION: &str = "actions/create-github-app-token@v3";
 const CRATES_IO_AUTH_ACTION: &str = "rust-lang/crates-io-auth-action@v1";
 const CONFIG: &str = "release-plz.toml";

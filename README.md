@@ -107,7 +107,7 @@ Each repository applies the preset and changes what it needs to:
 ```rust
 let mut project = Project::new();
 project.apply(TeamRust::new());
-project.get_mut::<Ci>().unwrap().job_mut("test").unwrap().steps_mut().push(Step::run("just e2e"));
+project.get_mut::<Ci>().unwrap().job_mut("test").unwrap().steps_mut().push(Step::run("mise run e2e"));
 project.synth()
 ```
 
@@ -135,12 +135,15 @@ project.apply(
 
 Each theme takes one config struct whose `new()` holds the preset's defaults (`Rust::new` takes just the MSRV): `.rust(Rust)`, `.workspace(Workspace)`, `.lints(Lints)`, `.rustfmt(Rustfmt)`, `.tools(Tools)`, `.ci(Ci)`, `.dependabot(Dependabot)` and `.release(Release)`. It also takes `.without_ci()`, `.without_dependabot()` and `.without_conventions()`. A repository can also publish its own preset from its `.framer/` crate, as a library next to the binary, for sibling repositories to depend on by path.
 
+The preset uses [mise tasks](https://mise.jdx.dev/tasks/) by default: `mise tasks ls` lists them, and `mise run test` runs the same tests as CI (with the default nextest profile). Use `RustMonorepo::new().with_just()` to keep using `just` locally and in CI.
+
 Bumping the preset's version in a repository and running `cargo framer` rolls out the change. Test presets without touching the disk using `framer::testing::render_preset`, which generates into an in-memory `MemoryFs`.
 
 ## Escape hatches
 
 - **Change a component a preset added:** `project.get_mut::<T>()`.
-- **Change a recipe a preset added:** `project.get_mut::<framer::just::Justfile>()`, then `recipe_mut("lint")` or `remove_recipe("test")`. Recipes outside the block stay yours.
+- **Change a mise task a preset added:** `project.toml("mise.toml").set("tasks.check.run", "cargo check --workspace")`. Add your own tasks directly in `mise.toml`.
+- **Change a `just` recipe (with `.with_just()`):** `project.get_mut::<framer::just::Justfile>()`, then `recipe_mut("lint")` or `remove_recipe("test")`. Recipes outside the block stay yours.
 - **Set any TOML key**, in a generated or partly generated file: `project.toml("Cargo.toml").set("profile.dist.codegen-units", 1_i64)`.
 - **Stop generating one file** but keep it as yours: `project.unmanage(".github/workflows/ci.yml")`.
 - **Write your own component:** implement `Component` and write to the `Output`.
@@ -152,3 +155,9 @@ Bumping the preset's version in a repository and running `cargo framer` rolls ou
 - `crates/cargo-framer`: the `cargo framer` command, which builds and runs `.framer/`.
 - `crates/framer-presets`: ready-made presets, starting with `RustMonorepo`.
 - `.framer/`: this repository's own framer project. It generates this repository's CI, toolchain pin, `Cargo.toml` workspace settings and the conventions in `AGENTS.md`.
+
+## Developing Framer
+
+Use mise `2026.11.10` or newer. Run `mise install` to install the project tools from `mise.lock`, then `mise run test` to run the tests and doctests. This repository requires locked downloads for its own tools without imposing that policy on your global tools.
+
+When a tool pin changes, regenerate with `cargo run -p cargo-framer`, then run `mise lock` and commit the lockfile diff. `mise run framer-check` verifies both the tool lockfile and the generated files.

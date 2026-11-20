@@ -1,7 +1,7 @@
-use crate::ci::just_job;
+use crate::ci::task_job;
+use crate::tasks::{Task, TaskRunner};
 use framer::TomlFile;
 use framer::github::Job;
-use framer::just::Recipe;
 use framer::rust::Profile;
 use framer::toml_edit::{Array, Value};
 
@@ -11,10 +11,11 @@ const CONFIG: &str = "dist-workspace.toml";
 /// archives, installers and GitHub Releases, built when a release tag is pushed.
 ///
 /// framer generates `dist-workspace.toml`, the `[profile.dist]` build profile
-/// and `just dist-*` recipes, and pins `cargo-dist` in `.tool-versions`. dist
+/// and `dist-*` tasks, and pins `cargo-dist` for mise. dist
 /// itself still generates `.github/workflows/release.yml` from that config: run
-/// `just dist-generate` after changing it. CI fails if the two drift apart,
-/// unless the workflow is customized with [`Dist::allow_dirty_ci`].
+/// `mise run dist-generate` (or `just dist-generate` if opted in) after changing
+/// it. CI fails if the two drift apart unless the workflow is customized with
+/// [`Dist::allow_dirty_ci`].
 ///
 /// Crates opt in to binary releases with `[package.metadata.dist] dist = true`.
 #[derive(Clone, Debug)]
@@ -44,7 +45,7 @@ impl Dist {
     /// Shell installers for Apple Silicon macOS and Linux on ARM and x86.
     pub fn new() -> Self {
         Self {
-            version: "0.31.0".into(),
+            version: "0.34.0".into(),
             targets: vec![
                 "aarch64-apple-darwin".into(),
                 "aarch64-unknown-linux-gnu".into(),
@@ -57,7 +58,7 @@ impl Dist {
         }
     }
 
-    /// The dist version, used both by `just dist-*` and in CI.
+    /// The dist version, used both by the `dist-*` tasks and in CI.
     pub fn version(mut self, version: &str) -> Self {
         version.clone_into(&mut self.version);
         self
@@ -80,7 +81,7 @@ impl Dist {
     }
 
     /// For a hand-customized `release.yml`: dist stops checking it matches the
-    /// config, and CI stops running `just dist-check`.
+    /// config, and CI stops running the `dist-check` task.
     pub fn allow_dirty_ci(mut self) -> Self {
         self.allow_dirty_ci = true;
         self
@@ -129,21 +130,28 @@ impl Dist {
         })
     }
 
-    pub(crate) fn recipes() -> [Recipe; 3] {
+    pub(crate) fn tasks() -> [Task; 3] {
         [
-            Recipe::new("dist-plan")
-                .doc("Preview what dist will build for the next release")
-                .line("dist plan"),
-            Recipe::new("dist-generate")
-                .doc("Regenerate the release workflow from dist-workspace.toml")
-                .line("dist generate"),
-            Recipe::new("dist-check")
-                .doc("Check the release workflow matches dist-workspace.toml")
-                .line("dist generate --check"),
+            Task::new(
+                "dist-plan",
+                "Preview what dist will build for the next release",
+            )
+            .line("dist plan"),
+            Task::new(
+                "dist-generate",
+                "Regenerate the release workflow from dist-workspace.toml",
+            )
+            .line("dist generate"),
+            Task::new(
+                "dist-check",
+                "Check the release workflow matches dist-workspace.toml",
+            )
+            .line("dist generate --check"),
         ]
     }
 
-    pub(crate) fn ci_job(&self) -> Option<Job> {
-        (!self.allow_dirty_ci).then(|| just_job("dist", "Release workflow", "dist-check", 15))
+    pub(crate) fn ci_job(&self, runner: TaskRunner) -> Option<Job> {
+        (!self.allow_dirty_ci)
+            .then(|| task_job(runner, "dist", "Release workflow", "dist-check", 15))
     }
 }

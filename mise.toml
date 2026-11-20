@@ -1,0 +1,51 @@
+min_version = "2026.11.10"
+[tasks.check]
+description = "Type-check every crate and target"
+run = "cargo check --workspace --all-targets --all-features"
+
+[tasks.test]
+description = "Run tests with nextest, then doctests, which nextest doesn't run"
+run = ['"$(mise which cargo-nextest)" nextest run --profile "${usage_profile?}" --workspace --all-features --no-tests pass', "cargo test --doc --workspace --all-features"]
+usage = 'arg "[profile]" default="default"'
+
+[tasks.test-ci]
+description = "Run tests with nextest's CI profile, which writes JUnit results"
+depends = ["test ci"]
+
+[tasks.lint]
+description = "Run Clippy, failing on any rustc, Clippy or Cargo warning"
+run = "CARGO_BUILD_WARNINGS=deny cargo clippy --workspace --all-targets --all-features"
+
+[tasks.fmt]
+description = "Format all code"
+run = "cargo fmt --all"
+
+[tasks.fmt-check]
+description = "Check formatting"
+run = "cargo fmt --all -- --check"
+
+[tasks.doc-check]
+description = "Build docs, failing on any warning"
+run = 'RUSTDOCFLAGS="-D warnings" cargo doc --workspace --all-features --no-deps --document-private-items'
+
+[tasks.framer]
+description = "Regenerate files from .framer/"
+run = "cargo run --quiet --manifest-path .framer/Cargo.toml"
+
+[tasks.framer-check]
+description = "Check generated files are up to date"
+run = "cargo run --quiet --locked --manifest-path .framer/Cargo.toml -- --check"
+depends = ["tools-check"]
+
+[tasks.tools-check]
+description = "Check the mise tool lockfile"
+run = "mise lock --check"
+
+[tools]
+"aqua:nextest-rs/nextest/cargo-nextest" = "0.9.152"
+
+[settings]
+lockfile_platforms = ["linux-x64", "linux-arm64", "macos-arm64", "macos-x64"]
+
+[tool_config]
+locked = true

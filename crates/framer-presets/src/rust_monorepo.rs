@@ -1,16 +1,16 @@
+use crate::tasks::TaskRunner;
 use crate::{Ci, Dist, Release, Rust, Rustfmt, Tools, Workspace};
 use framer::github::{Dependabot, DependabotUpdate};
-use framer::just::{Justfile, Recipe};
 use framer::rust::{CargoWorkspace, Level, Lints};
 use framer::toml_edit::{InlineTable, Value};
-use framer::{Preset, Project, TextBlock, TextFile, TomlFile};
+use framer::{Preset, Project, TextBlock, TomlFile};
 
 const BLOCK: &str = "rust-monorepo";
 const CONVENTIONS: &str = include_str!("conventions.md");
 
 /// A Cargo workspace of crates under `crates/`, held to a high bar: pedantic
-/// Clippy, a pinned toolchain, nextest, and CI that runs the same `just`
-/// recipes you run locally.
+/// Clippy, a pinned toolchain, nextest, and CI that runs the same tasks you
+/// run locally.
 ///
 /// It generates:
 ///
@@ -20,14 +20,15 @@ const CONVENTIONS: &str = include_str!("conventions.md");
 ///   `unreachable_pub` warned) and a faster-building `dev` profile. Dependencies
 ///   stay yours.
 /// - `clippy.toml`, `rustfmt.toml` and `.config/nextest.toml`, which requires
-///   the nextest version pinned in `.tool-versions`.
-/// - `.tool-versions`, so mise installs `just` and `cargo-nextest`.
-/// - A [`Justfile`] block of standard recipes: `check`, `test`, `test-ci`,
-///   `lint`, `fmt`, `fmt-check`, `doc-check`, `framer` and `framer-check`.
-///   Change them with `project.get_mut::<Justfile>()`, and keep your own
-///   recipes outside the block.
+///   the pinned nextest version.
+/// - `.tool-versions`, so mise installs `cargo-nextest`. Use [`Tools::mise_toml`]
+///   to put the tool pins in `mise.toml` instead.
+/// - Task definitions in `mise.toml`: `check`, `test`, `test-ci`, `lint`,
+///   `fmt`, `fmt-check`, `doc-check`, `framer` and `framer-check`. Custom
+///   tasks and other settings in `mise.toml` stay yours. Use
+///   [`RustMonorepo::with_just`] for a [`justfile`](framer::just::Justfile) block instead.
 /// - `.github/workflows/ci.yml`, running formatting, Clippy, tests, docs and
-///   the generated-files check through those recipes.
+///   the generated-files check through those tasks.
 /// - Blocks in `.gitignore` and `AGENTS.md`, the latter with coding and
 ///   testing conventions for people and agents.
 ///
@@ -44,6 +45,7 @@ pub struct RustMonorepo {
     lints: Lints,
     rustfmt: Rustfmt,
     tools: Tools,
+    runner: TaskRunner,
     ci: Option<Ci>,
     dependabot: Option<Dependabot>,
     conventions: bool,
@@ -73,6 +75,7 @@ impl RustMonorepo {
                 .cargo_group("pedantic", Level::Warn),
             rustfmt: Rustfmt::new(),
             tools: Tools::new(),
+            runner: TaskRunner::Mise,
             ci: Some(Ci::new()),
             dependabot: Some(
                 Dependabot::new().update(
@@ -110,6 +113,13 @@ impl RustMonorepo {
 
     pub fn tools(mut self, tools: Tools) -> Self {
         self.tools = tools;
+        self
+    }
+
+    /// Generates a `justfile` block and runs `just` in CI instead of generating
+    /// mise tasks. Mise still installs the tools, including `just`.
+    pub fn with_just(mut self) -> Self {
+        self.runner = TaskRunner::Just;
         self
     }
 
@@ -157,14 +167,16 @@ impl RustMonorepo {
         }
     }
 
-    fn tool_versions(&self) -> TextFile {
-        let tools = self
-            .release
+    fn tool_versions(&self) -> Tools {
+        let tools = match self.runner {
+            TaskRunner::Mise => self.tools.clone(),
+            TaskRunner::Just => self.tools.clone().with_default_just(),
+        };
+        self.release
             .dist_config()
             .map(Dist::tool)
             .into_iter()
-            .fold(self.tools.clone(), Tools::with_default);
-        TextFile::new(".tool-versions", tools.file_contents())
+            .fold(tools, Tools::with_default)
     }
 
     fn nextest_config(&self) -> TomlFile {
@@ -188,65 +200,6 @@ impl RustMonorepo {
             .set("profile.ci.junit.store-success-output", false)
             .set("profile.ci.junit.store-failure-output", true)
     }
-
-    fn justfile(&self) -> Justfile {
-        let manifests = self.workspace.extra_manifest_paths();
-        let mut lint = Recipe::new("lint")
-            .doc("Run Clippy, failing on any rustc, Clippy or Cargo warning")
-            .line(
-                "CARGO_BUILD_WARNINGS=deny cargo clippy --workspace --all-targets --all-features",
-            );
-        let mut fmt = Recipe::new("fmt")
-            .doc("Format all code")
-            .line("cargo fmt --all");
-        let mut fmt_check = Recipe::new("fmt-check")
-            .doc("Check formatting")
-            .line("cargo fmt --all -- --check");
-        for manifest in manifests {
-            lint = lint.line(format!(
-                "CARGO_BUILD_WARNINGS=deny cargo clippy --manifest-path {manifest} --target-dir target --all-targets --all-features"
-            ));
-            fmt = fmt.line(format!("cargo fmt --manifest-path {manifest}"));
-            fmt_check = fmt_check.line(format!("cargo fmt --manifest-path {manifest} -- --check"));
-        }
-        let recipes = [
-            Recipe::new("default")
-                .doc("List available recipes")
-                .line("@just --list"),
-            Recipe::new("check")
-                .doc("Type-check every crate and target")
-                .line("cargo check --workspace --all-targets --all-features"),
-            Recipe::new("test")
-                .doc("Run tests with nextest, then doctests, which nextest doesn't run")
-                .parameters(r#"profile="default""#)
-                .line("cargo nextest run --profile {{profile}} --workspace --all-features --no-tests pass")
-                .line("cargo test --doc --workspace --all-features"),
-            Recipe::new("test-ci")
-                .doc("Run tests with nextest's CI profile, which writes JUnit results")
-                .dependencies(r#"(test "ci")"#),
-            lint,
-            fmt,
-            fmt_check,
-            Recipe::new("doc-check")
-                .doc("Build docs, failing on any warning")
-                .line(r#"RUSTDOCFLAGS="-D warnings" cargo doc --workspace --all-features --no-deps --document-private-items"#),
-            Recipe::new("framer")
-                .doc("Regenerate files from .framer/")
-                .line("cargo run --quiet --manifest-path .framer/Cargo.toml"),
-            Recipe::new("framer-check")
-                .doc("Check generated files are up to date")
-                .line("cargo run --quiet --locked --manifest-path .framer/Cargo.toml -- --check"),
-        ];
-        let dist_recipes = self
-            .release
-            .dist_config()
-            .into_iter()
-            .flat_map(|_| Dist::recipes());
-        recipes.into_iter().chain(dist_recipes).fold(
-            Justfile::new(BLOCK).setting(r#"shell := ["bash", "-euo", "pipefail", "-c"]"#),
-            Justfile::recipe,
-        )
-    }
 }
 
 impl Preset for RustMonorepo {
@@ -256,11 +209,23 @@ impl Preset for RustMonorepo {
         project.add(TomlFile::new("clippy.toml").set("msrv", self.rust.msrv()));
         project.add(self.rustfmt.file());
         project.add(self.nextest_config());
-        project.add(self.tool_versions());
-        project.add(self.justfile());
+        self.tool_versions().add_to_project(project);
+        self.runner.add_tasks(
+            project,
+            BLOCK,
+            self.workspace.extra_manifest_paths(),
+            self.release
+                .dist_config()
+                .into_iter()
+                .flat_map(|_| Dist::tasks()),
+        );
         if let Some(ci) = &self.ci {
-            let workflow = ci.workflow();
-            project.add(match self.release.dist_config().and_then(Dist::ci_job) {
+            let workflow = ci.workflow(self.runner);
+            let dist_job = self
+                .release
+                .dist_config()
+                .and_then(|dist| dist.ci_job(self.runner));
+            project.add(match dist_job {
                 Some(job) => workflow.job(job),
                 None => workflow,
             });

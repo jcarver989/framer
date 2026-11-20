@@ -35,7 +35,7 @@ jobs:
         id: crates-io-auth
         uses: rust-lang/crates-io-auth-action@v1
       - name: Run release-plz release
-        uses: release-plz/action@v0.5.142
+        uses: release-plz/action@v0.5.148
         with:
           command: release
         env:
@@ -66,7 +66,7 @@ jobs:
       - name: Cache Rust builds
         uses: Swatinem/rust-cache@v2
       - name: Run release-plz release-pr
-        uses: release-plz/action@v0.5.142
+        uses: release-plz/action@v0.5.148
         with:
           command: release-pr
         env:
