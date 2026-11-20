@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.4](https://github.com/jcarver989/framer/compare/cargo-framer-v0.2.3...cargo-framer-v0.2.4) - 2026-11-20
+
+### Added
+
+- *(presets)* default Rust monorepos to mise tasks ([#14](https://github.com/jcarver989/framer/pull/14))
+
 ## [0.2.3](https://github.com/jcarver989/framer/compare/cargo-framer-v0.2.2...cargo-framer-v0.2.3) - 2026-11-17
 
 ### Added
