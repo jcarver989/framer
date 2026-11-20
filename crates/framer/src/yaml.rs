@@ -287,7 +287,7 @@ mod tests {
             .with(
                 "steps",
                 vec![
-                    Yaml::map().with("uses", "actions/checkout@v6"),
+                    Yaml::map().with("uses", "actions/checkout@v7"),
                     Yaml::map().with("name", "Test").with("run", "cargo test"),
                 ],
             );
@@ -301,7 +301,7 @@ mod tests {
                     branches: [main]
                   pull_request:
                 steps:
-                  - uses: actions/checkout@v6
+                  - uses: actions/checkout@v7
                   - name: Test
                     run: cargo test
             "}

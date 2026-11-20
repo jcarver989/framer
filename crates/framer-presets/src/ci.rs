@@ -1,12 +1,12 @@
+use crate::tasks::TaskRunner;
 use framer::github::{self, Job, Step};
 
-const CHECKOUT: &str = "actions/checkout@v7";
-const MISE: &str = "jdx/mise-action@v5.2.0";
+const MISE: &str = "jdx/mise-action@v5.2.10";
 const RUST_CACHE: &str = "Swatinem/rust-cache@v2";
 
 /// `.github/workflows/ci.yml`: formatting, Clippy, tests, docs and the
-/// generated-files check, each running its `just` recipe. Tools come from
-/// `.tool-versions` through mise, and Rust from `rust-toolchain.toml`.
+/// generated-files check, each using the preset's task runner. Tools come from
+/// `.tool-versions` or `mise.toml` through mise, and Rust from `rust-toolchain.toml`.
 ///
 /// Builds on [`framer::github::Ci`], adding the preset's jobs and the steps
 /// every job that compiles shares.
@@ -68,18 +68,18 @@ impl Ci {
     }
 
     /// Leaves the generated-files check out of CI, for when CI can't fetch
-    /// the `.framer/` crate's dependencies. `just framer-check` still works locally.
+    /// the `.framer/` crate's dependencies. The `framer-check` task still works locally.
     pub fn without_framer_check(mut self) -> Self {
         self.framer_check = false;
         self
     }
 
-    pub(crate) fn workflow(&self) -> github::Ci {
+    pub(crate) fn workflow(&self, runner: TaskRunner) -> github::Ci {
         let test = CompilingJob::new("test", "Test", "test-ci")
             .timeout_minutes(30)
             .runs_on_matrix()
             .step(
-                Step::uses("actions/upload-artifact@v6")
+                Step::uses("actions/upload-artifact@v7")
                     .name("Upload test results")
                     .condition("always()")
                     .with("name", "test-results-${{ runner.os }}")
@@ -91,25 +91,34 @@ impl Ci {
             test,
             CompilingJob::new("docs", "Docs", "doc-check").timeout_minutes(15),
         ];
-        let mut ci = github::Ci::new().matrix(self.matrix.clone()).job(just_job(
+        let mut ci = github::Ci::new().matrix(self.matrix.clone()).job(task_job(
+            runner,
             "fmt",
             "Formatting",
             "fmt-check",
             15,
         ));
-        ci = compiling.iter().fold(ci, |ci, job| ci.job(self.build(job)));
+        ci = compiling
+            .iter()
+            .fold(ci, |ci, job| ci.job(self.build(runner, job)));
         ci = if self.framer_check {
-            ci.job(just_job("framer", "Generated files", "framer-check", 15))
+            ci.job(task_job(
+                runner,
+                "framer",
+                "Generated files",
+                "framer-check",
+                15,
+            ))
         } else {
             ci.without_framer_check()
         };
         self.jobs.iter().fold(ci, |ci, job| match job {
             CiJob::Plain(job) => ci.job(job.clone()),
-            CiJob::Compiling(job) => ci.job(self.build(job)),
+            CiJob::Compiling(job) => ci.job(self.build(runner, job)),
         })
     }
 
-    fn build(&self, job: &CompilingJob) -> Job {
+    fn build(&self, runner: TaskRunner, job: &CompilingJob) -> Job {
         let mut built = Job::new(&job.id)
             .name(&job.name)
             .timeout_minutes(job.timeout_minutes);
@@ -121,20 +130,20 @@ impl Ci {
                 .into_iter()
                 .chain(self.setup.iter().cloned())
                 .chain(job.before.iter().cloned())
-                .chain([Step::run(format!("just {}", job.recipe))])
+                .chain([Step::run(runner.command(&job.task))])
                 .chain(job.after.iter().cloned()),
         );
         built
     }
 }
 
-/// A CI job that runs `just <recipe>` after checking out, installing tools,
+/// A CI job that invokes the preset's task runner after checking out, installing tools,
 /// restoring the build cache and running the [`Ci::setup`] steps.
 #[derive(Clone, Debug)]
 pub struct CompilingJob {
     id: String,
     name: String,
-    recipe: String,
+    task: String,
     timeout_minutes: u32,
     matrix: bool,
     before: Vec<Step>,
@@ -143,11 +152,11 @@ pub struct CompilingJob {
 
 impl CompilingJob {
     /// A job on `ubuntu-latest` with a 20-minute timeout.
-    pub fn new(id: &str, name: &str, recipe: &str) -> Self {
+    pub fn new(id: &str, name: &str, task: &str) -> Self {
         Self {
             id: id.into(),
             name: name.into(),
-            recipe: recipe.into(),
+            task: task.into(),
             timeout_minutes: 20,
             matrix: false,
             before: Vec::new(),
@@ -166,14 +175,14 @@ impl CompilingJob {
         self
     }
 
-    /// A step to run after the setup steps and before the recipe, such as
+    /// A step to run after the setup steps and before the task, such as
     /// installing a tool only this job needs.
     pub fn before(mut self, step: Step) -> Self {
         self.before.push(step);
         self
     }
 
-    /// A step to run after the recipe.
+    /// A step to run after the task.
     pub fn step(mut self, step: Step) -> Self {
         self.after.push(step);
         self
@@ -181,21 +190,26 @@ impl CompilingJob {
 }
 
 pub(crate) fn checkout() -> Step {
-    Step::uses(CHECKOUT).name("Checkout repository")
+    Step::checkout().name("Checkout repository")
 }
 
 pub(crate) fn rust_cache() -> Step {
     Step::uses(RUST_CACHE).name("Cache Rust builds")
 }
 
-/// A job that runs `just <recipe>` without compiling the workspace.
-pub(crate) fn just_job(id: &str, name: &str, recipe: &str, timeout_minutes: u32) -> Job {
+pub(crate) fn task_job(
+    runner: TaskRunner,
+    id: &str,
+    name: &str,
+    task: &str,
+    timeout_minutes: u32,
+) -> Job {
     Job::new(id)
         .name(name)
         .timeout_minutes(timeout_minutes)
         .step(checkout())
         .step(install_tools())
-        .step(Step::run(format!("just {recipe}")))
+        .step(Step::run(runner.command(task)))
 }
 
 fn install_tools() -> Step {

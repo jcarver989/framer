@@ -345,9 +345,9 @@ fn ci_workflow_output() {
             timeout-minutes: 30
             steps:
               - name: Checkout
-                uses: actions/checkout@v6
+                uses: actions/checkout@v7
               - name: Install Rust
-                uses: actions-rust-lang/setup-rust-toolchain@v1
+                uses: actions-rust-lang/setup-rust-toolchain@v2
               - name: Run Clippy
                 run: cargo clippy --workspace --all-targets --all-features -- -D warnings
           test:
@@ -360,9 +360,9 @@ fn ci_workflow_output() {
             timeout-minutes: 30
             steps:
               - name: Checkout
-                uses: actions/checkout@v6
+                uses: actions/checkout@v7
               - name: Install Rust
-                uses: actions-rust-lang/setup-rust-toolchain@v1
+                uses: actions-rust-lang/setup-rust-toolchain@v2
               - name: Run tests
                 run: cargo test --workspace --all-features
           framer:
@@ -371,9 +371,9 @@ fn ci_workflow_output() {
             timeout-minutes: 15
             steps:
               - name: Checkout
-                uses: actions/checkout@v6
+                uses: actions/checkout@v7
               - name: Install Rust
-                uses: actions-rust-lang/setup-rust-toolchain@v1
+                uses: actions-rust-lang/setup-rust-toolchain@v2
               - name: Check generated files are up to date
                 run: cargo run --locked --manifest-path .framer/Cargo.toml -- --check
     "#};

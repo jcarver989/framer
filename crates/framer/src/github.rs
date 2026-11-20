@@ -53,12 +53,12 @@ impl Step {
     }
 
     pub fn checkout() -> Self {
-        Self::uses("actions/checkout@v6").name("Checkout")
+        Self::uses("actions/checkout@v7").name("Checkout")
     }
 
     /// Installs the toolchain from `rust-toolchain.toml` and caches build artifacts.
     pub fn rust_toolchain() -> Self {
-        Self::uses("actions-rust-lang/setup-rust-toolchain@v1").name("Install Rust")
+        Self::uses("actions-rust-lang/setup-rust-toolchain@v2").name("Install Rust")
     }
 
     pub fn name(mut self, name: impl Into<String>) -> Self {

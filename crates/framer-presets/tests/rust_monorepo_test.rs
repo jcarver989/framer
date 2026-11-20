@@ -2,6 +2,7 @@ use framer::github::{Dependabot, DependabotUpdate, Job, Step};
 use framer::just::Justfile;
 use framer::rust::{Level, Lints, Profile};
 use framer::testing::{render, render_into, render_preset};
+use framer::toml_edit::{DocumentMut, Value};
 use framer::{MemoryFs, Mode, Project, Result};
 use framer_presets::{
     Ci, CompilingJob, Dist, Release, ReleasePlz, Rust, RustMonorepo, Rustfmt, Tools, Workspace,
@@ -25,7 +26,7 @@ fn generates_the_whole_setup() -> Result<()> {
             "AGENTS.md",
             "Cargo.toml",
             "clippy.toml",
-            "justfile",
+            "mise.toml",
             "rust-toolchain.toml",
             "rustfmt.toml",
         ]
@@ -36,9 +37,9 @@ fn generates_the_whole_setup() -> Result<()> {
     );
     assert!(file(&fs, "clippy.toml").ends_with("msrv = \"1.100\"\n"));
     assert!(
-        file(&fs, ".tool-versions")
-            .ends_with("just 1.58.0\naqua:nextest-rs/nextest/cargo-nextest 0.9.144\n")
+        file(&fs, ".tool-versions").ends_with("\naqua:nextest-rs/nextest/cargo-nextest 0.9.152\n")
     );
+    assert!(!file(&fs, ".tool-versions").contains("\njust "));
     assert!(file(&fs, "AGENTS.md").contains("### Testing"));
     Ok(())
 }
@@ -61,7 +62,16 @@ fn keeps_what_the_repository_owns() -> Result<()> {
             "Cargo.toml",
             "[workspace.package]\nversion = \"0.3.0\"\n\n[workspace.dependencies]\nserde = \"1\"\n",
         )
-        .with_file("justfile", "run:\n    cargo run -p app\n")
+        .with_file(
+            "mise.toml",
+            indoc! {r#"
+            [env]
+            APP_ENV = "development"
+
+            [tasks.run]
+            run = "cargo run -p app"
+        "#},
+        )
         .with_file(
             "release-plz.toml",
             "[[package]]\nname = \"app\"\nrelease = true\n",
@@ -72,10 +82,10 @@ fn keeps_what_the_repository_owns() -> Result<()> {
     let cargo = file(&fs, "Cargo.toml");
     assert!(cargo.contains("[workspace.package]\nversion = \"0.3.0\"\nedition = \"2024\"\n"));
     assert!(cargo.contains("[workspace.dependencies]\nserde = \"1\"\n"));
-    assert!(
-        file(&fs, "justfile")
-            .starts_with("run:\n    cargo run -p app\n\n# framer:begin rust-monorepo\n")
-    );
+    let mise = file(&fs, "mise.toml");
+    assert!(mise.contains("[env]\nAPP_ENV = \"development\"\n"));
+    assert!(mise.contains("[tasks.run]\nrun = \"cargo run -p app\"\n"));
+    assert!(mise.contains("[tasks.check]\n"));
     assert!(
         file(&fs, "release-plz.toml").contains("[[package]]\nname = \"app\"\nrelease = true\n")
     );
@@ -112,19 +122,113 @@ fn workspace_lints_and_profiles() -> Result<()> {
 }
 
 #[test]
-fn ci_runs_the_same_recipes_as_local_development() -> Result<()> {
+fn ci_runs_the_same_mise_tasks_as_local_development() -> Result<()> {
     let fs = render_preset(RustMonorepo::new())?;
 
     let ci = file(&fs, ".github/workflows/ci.yml");
-    for recipe in ["fmt-check", "lint", "test-ci", "doc-check", "framer-check"] {
-        assert!(ci.contains(&format!("run: just {recipe}\n")), "{recipe}");
+    for task in ["fmt-check", "lint", "test-ci", "doc-check", "framer-check"] {
+        assert!(ci.contains(&format!("run: mise run {task}\n")), "{task}");
         assert!(
-            file(&fs, "justfile").contains(&format!("\n{recipe}:")),
-            "{recipe}"
+            file(&fs, "mise.toml").contains(&format!("[tasks.{task}]")),
+            "{task}"
         );
     }
-    assert!(ci.contains("uses: jdx/mise-action@v5.2.0"));
+    assert!(ci.contains("uses: jdx/mise-action@v5.2.10"));
+    assert!(ci.contains("uses: actions/upload-artifact@v7"));
+    assert!(ci.contains("path: target/nextest/ci/junit.xml"));
+    assert!(ci.contains("name: test-results-${{ runner.os }}"));
     assert!(!ci.contains("dist"));
+    Ok(())
+}
+
+#[test]
+fn mise_tests_run_nextest_with_a_profile_then_doctests() -> Result<()> {
+    let fs = render_preset(RustMonorepo::new())?;
+    let config: DocumentMut = file(&fs, "mise.toml").parse().expect("valid TOML");
+    let test = &config["tasks"]["test"];
+    assert_eq!(
+        test["usage"].as_str(),
+        Some(r#"arg "[profile]" default="default""#)
+    );
+    let steps = test["run"].as_array().expect("ordered test commands");
+    assert_eq!(steps.len(), 2);
+    assert_eq!(
+        steps.get(0).and_then(Value::as_str),
+        Some(
+            r#""$(mise which cargo-nextest)" nextest run --profile "${usage_profile?}" --workspace --all-features --no-tests pass"#
+        ),
+    );
+    assert_eq!(
+        steps.get(1).and_then(Value::as_str),
+        Some("cargo test --doc --workspace --all-features")
+    );
+    let test_ci = &config["tasks"]["test-ci"];
+    assert_eq!(
+        test_ci["depends"]
+            .as_array()
+            .and_then(|deps| deps.get(0))
+            .and_then(Value::as_str),
+        Some("test ci")
+    );
+    Ok(())
+}
+
+#[test]
+fn just_opt_in_pins_just_and_uses_it_for_all_generated_jobs() -> Result<()> {
+    let preset = full_preset()
+        .with_just()
+        .ci(Ci::new().compiling_job(CompilingJob::new("custom", "Custom", "custom-check")));
+    let fs = render_preset(preset)?;
+
+    assert_eq!(fs.get("mise.toml"), None);
+    assert!(file(&fs, ".tool-versions").contains("\njust 1.58.0\n"));
+    let justfile = file(&fs, "justfile");
+    assert!(justfile.contains("default:\n    @just --list\n"));
+    assert!(
+        justfile.contains("test profile=\"default\":\n    cargo nextest run --profile {{profile}}")
+    );
+    assert!(justfile.contains("test-ci: (test \"ci\")\n"));
+    assert!(justfile.contains("dist-check:\n    dist generate --check\n"));
+    let ci = file(&fs, ".github/workflows/ci.yml");
+    for task in [
+        "fmt-check",
+        "lint",
+        "test-ci",
+        "doc-check",
+        "framer-check",
+        "dist-check",
+        "custom-check",
+    ] {
+        assert!(ci.contains(&format!("run: just {task}\n")), "{task}");
+    }
+    assert!(!ci.contains("run: mise run"));
+    Ok(())
+}
+
+#[test]
+fn changing_runners_retires_only_framers_tasks() -> Result<()> {
+    let custom_recipe = "custom:\n    cargo run -p app\n";
+    let custom_task = "[tasks.custom]\nrun = \"cargo run -p app\"\n";
+    let existing = MemoryFs::new()
+        .with_file("justfile", custom_recipe)
+        .with_file("mise.toml", custom_task);
+    let legacy = project(full_preset().with_just());
+    let mise = project(full_preset());
+    let mut fs = render_into(&legacy, existing)?;
+
+    assert_eq!(file(&fs, "mise.toml"), custom_task);
+    assert!(file(&fs, "justfile").starts_with(custom_recipe));
+    assert!(file(&fs, "justfile").contains("# framer:begin rust-monorepo\n"));
+
+    mise.synth_with(&mut fs, Mode::Write)?;
+    assert_eq!(file(&fs, "justfile"), custom_recipe);
+    assert!(!file(&fs, ".tool-versions").contains("\njust "));
+    assert!(file(&fs, "mise.toml").contains(custom_task));
+    assert!(file(&fs, "mise.toml").contains("[tasks.dist-check]"));
+
+    legacy.synth_with(&mut fs, Mode::Write)?;
+    assert_eq!(file(&fs, "mise.toml"), custom_task);
+    assert!(file(&fs, "justfile").contains("# framer:begin rust-monorepo\n"));
     Ok(())
 }
 
@@ -132,11 +236,11 @@ fn ci_runs_the_same_recipes_as_local_development() -> Result<()> {
 fn lint_fails_on_cargo_warnings_as_well_as_rustc_and_clippy_warnings() -> Result<()> {
     let fs = render_preset(RustMonorepo::new())?;
 
-    assert!(file(&fs, "justfile").contains(indoc! {"
-        # Run Clippy, failing on any rustc, Clippy or Cargo warning
-        lint:
-            CARGO_BUILD_WARNINGS=deny cargo clippy --workspace --all-targets --all-features
-    "}));
+    assert!(file(&fs, "mise.toml").contains(indoc! {r#"
+        [tasks.lint]
+        description = "Run Clippy, failing on any rustc, Clippy or Cargo warning"
+        run = "CARGO_BUILD_WARNINGS=deny cargo clippy --workspace --all-targets --all-features"
+    "#}));
     Ok(())
 }
 
@@ -212,6 +316,7 @@ fn msrv_toolchain_and_tools_are_configurable() -> Result<()> {
                 .toolchain("1.99.1")
                 .targets(["wasm32-unknown-unknown"]),
         )
+        .with_just()
         .tools(Tools::new().just("1.60.0").tool("actionlint", "1.7.12"));
 
     let fs = render_preset(preset)?;
@@ -221,7 +326,7 @@ fn msrv_toolchain_and_tools_are_configurable() -> Result<()> {
     assert!(file(&fs, "Cargo.toml").contains("rust-version = \"1.97\""));
     assert!(file(&fs, "clippy.toml").contains("msrv = \"1.97\""));
     assert!(file(&fs, ".tool-versions").ends_with(
-        "just 1.60.0\naqua:nextest-rs/nextest/cargo-nextest 0.9.144\nactionlint 1.7.12\n"
+        "aqua:nextest-rs/nextest/cargo-nextest 0.9.152\njust 1.60.0\nactionlint 1.7.12\n"
     ));
     Ok(())
 }
@@ -249,6 +354,12 @@ fn release_plz_owns_only_its_workspace_settings() -> Result<()> {
     let workflow = file(&fs, ".github/workflows/release-plz.yml");
     assert!(workflow.contains("client-id: ${{ secrets.RELEASE_AUTOMATION_APP_CLIENT_ID }}"));
     assert!(workflow.contains("needs: [release-plz-release]"));
+    assert_eq!(
+        workflow
+            .matches("uses: release-plz/action@v0.5.148")
+            .count(),
+        2
+    );
     assert!(!workflow.contains("CARGO_REGISTRY_TOKEN"));
     Ok(())
 }
@@ -306,7 +417,7 @@ fn release_plz_setup_steps_run_before_both_jobs_build() -> Result<()> {
 }
 
 #[test]
-fn dist_adds_config_profile_tool_recipes_and_a_ci_check() -> Result<()> {
+fn dist_adds_config_profile_tool_tasks_and_a_ci_check() -> Result<()> {
     let fs = render_preset(
         RustMonorepo::new()
             .release(Release::new().dist(Dist::new().homebrew_tap("me/homebrew-tap"))),
@@ -321,9 +432,9 @@ fn dist_adds_config_profile_tool_recipes_and_a_ci_check() -> Result<()> {
         file(&fs, "Cargo.toml")
             .ends_with("[profile.dist]\ninherits = \"release\"\nlto = \"thin\"\n")
     );
-    assert!(file(&fs, ".tool-versions").ends_with("cargo-dist 0.31.0\n"));
-    assert!(file(&fs, "justfile").contains("\ndist-check:\n    dist generate --check\n"));
-    assert!(file(&fs, ".github/workflows/ci.yml").contains("run: just dist-check\n"));
+    assert!(file(&fs, ".tool-versions").ends_with("cargo-dist 0.34.0\n"));
+    assert!(file(&fs, "mise.toml").contains("run = \"dist generate --check\"\n"));
+    assert!(file(&fs, ".github/workflows/ci.yml").contains("run: mise run dist-check\n"));
     Ok(())
 }
 
@@ -349,6 +460,7 @@ fn turning_off_release_automation_cleans_it_up() -> Result<()> {
     assert_eq!(fs.get("release-plz.toml"), None);
     assert!(!file(&fs, "Cargo.toml").contains("[profile.dist]"));
     assert!(!file(&fs, ".tool-versions").contains("cargo-dist"));
+    assert!(!file(&fs, "mise.toml").contains("[tasks.dist-"));
     Ok(())
 }
 
@@ -398,12 +510,49 @@ fn rustfmt_options_extend_and_override_the_preset() -> Result<()> {
 
 #[test]
 fn nextest_requires_the_version_mise_installs() -> Result<()> {
-    let fs = render_preset(RustMonorepo::new().tools(Tools::new().nextest("0.9.150")))?;
+    let fs = render_preset(RustMonorepo::new().tools(Tools::new().nextest("0.9.153")))?;
 
     assert!(
         file(&fs, ".config/nextest.toml")
-            .contains("nextest-version = { required = \"0.9.150\" }\n")
+            .contains("nextest-version = { required = \"0.9.153\" }\n")
     );
+    Ok(())
+}
+
+#[test]
+fn tool_pins_can_move_to_mise_toml_and_back() -> Result<()> {
+    let standard = project(full_preset().with_just());
+    let locked = project(
+        full_preset().with_just().tools(
+            Tools::new()
+                .mise_toml()
+                .nextest("0.9.153")
+                .tool("packslip:github.com/me/tool", "1.2.3"),
+        ),
+    );
+    let user_config = "[env]\nAPP_ENV = \"development\"\n";
+    let mut fs = render_into(
+        &standard,
+        MemoryFs::new().with_file("mise.toml", user_config),
+    )?;
+
+    locked.synth_with(&mut fs, Mode::Write)?;
+    assert_eq!(fs.get(".tool-versions"), None);
+    let config: DocumentMut = file(&fs, "mise.toml").parse().expect("valid TOML");
+    assert_eq!(config["env"]["APP_ENV"].as_str(), Some("development"));
+    let tools = &config["tools"];
+    assert_eq!(
+        tools["aqua:nextest-rs/nextest/cargo-nextest"].as_str(),
+        Some("0.9.153")
+    );
+    assert_eq!(tools["packslip:github.com/me/tool"].as_str(), Some("1.2.3"));
+    assert_eq!(tools["cargo-dist"].as_str(), Some("0.34.0"));
+    assert_eq!(tools["just"].as_str(), Some("1.58.0"));
+    assert!(file(&fs, ".config/nextest.toml").contains(r#"required = "0.9.153""#));
+
+    standard.synth_with(&mut fs, Mode::Write)?;
+    assert_eq!(file(&fs, "mise.toml"), user_config);
+    assert!(file(&fs, ".tool-versions").contains("cargo-nextest 0.9.152"));
     Ok(())
 }
 
@@ -414,20 +563,37 @@ fn extra_manifests_are_linted_and_formatted() -> Result<()> {
             .workspace(Workspace::new().extra_manifests(["tests/fixture/Cargo.toml"])),
     )?;
 
-    let justfile = file(&fs, "justfile");
-    assert!(justfile.contains(
-        "    CARGO_BUILD_WARNINGS=deny cargo clippy --manifest-path tests/fixture/Cargo.toml --target-dir target --all-targets --all-features\n"
+    let mise = file(&fs, "mise.toml");
+    assert!(mise.contains(
+        "CARGO_BUILD_WARNINGS=deny cargo clippy --manifest-path tests/fixture/Cargo.toml --target-dir target --all-targets --all-features"
     ));
-    assert!(justfile.contains("    cargo fmt --manifest-path tests/fixture/Cargo.toml\n"));
-    assert!(
-        justfile.contains("    cargo fmt --manifest-path tests/fixture/Cargo.toml -- --check\n")
+    assert!(mise.contains("cargo fmt --manifest-path tests/fixture/Cargo.toml\""));
+    assert!(mise.contains("cargo fmt --manifest-path tests/fixture/Cargo.toml -- --check\""));
+    Ok(())
+}
+
+#[test]
+fn mise_tasks_can_be_overridden_without_replacing_the_whole_task() -> Result<()> {
+    let mut project = project(RustMonorepo::new());
+    project
+        .toml("mise.toml")
+        .set("tasks.check.run", "cargo check -p app");
+
+    let fs = render(&project)?;
+
+    let config: DocumentMut = file(&fs, "mise.toml").parse().expect("valid TOML");
+    let check = &config["tasks"]["check"];
+    assert_eq!(check["run"].as_str(), Some("cargo check -p app"));
+    assert_eq!(
+        check["description"].as_str(),
+        Some("Type-check every crate and target")
     );
     Ok(())
 }
 
 #[test]
 fn recipes_can_be_changed_after_the_preset_is_applied() -> Result<()> {
-    let mut project = project(RustMonorepo::new());
+    let mut project = project(RustMonorepo::new().with_just());
     let justfile = project
         .get_mut::<Justfile>()
         .expect("the preset adds a justfile");
@@ -468,7 +634,7 @@ fn compiling_jobs_set_up_like_the_preset_jobs() -> Result<()> {
         "Cache Rust builds",
         "Install system libraries",
         "Install trunk",
-        "run: just wasm-check",
+        "run: mise run wasm-check",
         "Run browser tests",
     ]
     .map(|step| {
@@ -502,7 +668,7 @@ fn ci_framer_check_and_conventions_are_optional() -> Result<()> {
     let without_ci = render_preset(RustMonorepo::new().without_ci().without_conventions())?;
 
     assert!(!file(&without_check, ".github/workflows/ci.yml").contains("framer-check"));
-    assert!(file(&without_check, "justfile").contains("\nframer-check:"));
+    assert!(file(&without_check, "mise.toml").contains("[tasks.framer-check]"));
     assert_eq!(without_ci.get(".github/workflows/ci.yml"), None);
     assert_eq!(without_ci.get("AGENTS.md"), None);
     Ok(())

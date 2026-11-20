@@ -19,9 +19,6 @@
         "rust-monorepo"
       ]
     },
-    ".tool-versions": {
-      "kind": "managed"
-    },
     "AGENTS.md": {
       "kind": "blocks",
       "ids": [
@@ -44,10 +41,24 @@
     "clippy.toml": {
       "kind": "managed"
     },
-    "justfile": {
-      "kind": "blocks",
-      "ids": [
-        "rust-monorepo"
+    "mise.toml": {
+      "kind": "toml",
+      "keys": [
+        "tools",
+        "tasks.check",
+        "tasks.test",
+        "tasks.test-ci",
+        "tasks.lint",
+        "tasks.fmt",
+        "tasks.fmt-check",
+        "tasks.doc-check",
+        "tasks.framer",
+        "tasks.framer-check",
+        "min_version",
+        "settings.lockfile_platforms",
+        "tool_config.locked",
+        "tasks.tools-check.description",
+        "tasks.tools-check.run"
       ]
     },
     "release-plz.toml": {
